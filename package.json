@@ -4,15 +4,37 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "test": "jest"
   },
   "dependencies": {
+    "@expo-google-fonts/inter": "^0.4.2",
+    "@react-navigation/bottom-tabs": "^7.15.7",
+    "@react-navigation/native": "^7.2.0",
     "expo": "~55.0.8",
+    "expo-font": "^55.0.4",
+    "expo-notifications": "^55.0.13",
+    "expo-sqlite": "^55.0.11",
     "expo-status-bar": "~55.0.4",
     "react": "19.2.0",
-    "react-native": "0.83.2"
+    "react-dom": "^19.2.0",
+    "react-native": "0.83.2",
+    "react-native-calendars": "^1.1314.0",
+    "react-native-get-sms-android": "^2.1.0",
+    "react-native-gifted-charts": "^1.4.76",
+    "react-native-linear-gradient": "^2.8.3",
+    "react-native-safe-area-context": "^5.7.0",
+    "react-native-screens": "^4.24.0",
+    "react-native-svg": "^15.15.4",
+    "react-native-web": "^0.21.2"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "@babel/preset-env": "^7.29.2",
+    "babel-jest": "^30.3.0",
+    "babel-preset-expo": "^55.0.12",
+    "jest": "^30.3.0"
+  }
 }
