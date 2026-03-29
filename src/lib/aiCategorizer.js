@@ -2,14 +2,18 @@
  * AI Categorizer — Claude-powered Merchant Enrichment (BATCHED)
  * Sends ALL unique merchants in a SINGLE API call → stays well within rate limits.
  * Only the merchant names leave the device. Zero financial data sent.
+ *
+ * Calls the Cloudflare Worker proxy (EXPO_PUBLIC_AI_PROXY_URL) so the
+ * Anthropic API key never lives in the app bundle.
  */
 
-const API_KEY = process.env.EXPO_PUBLIC_CLAUDE_API_KEY;
+const PROXY_URL = process.env.EXPO_PUBLIC_AI_PROXY_URL;
+const PROXY_SECRET = process.env.EXPO_PUBLIC_PROXY_SECRET;
 
 const VALID_CATEGORIES = new Set([
     'food', 'groceries', 'shopping', 'transport', 'bills', 'health',
     'entertainment', 'transfers', 'rent', 'education', 'investment',
-    'internal_transfer', 'hardware', 'uncategorized'
+    'internal_transfer', 'hardware', 'atm', 'uncategorized'
 ]);
 
 /**
@@ -24,8 +28,8 @@ export async function enrichMerchantsBatch(merchants, onProgress) {
         return {};
     }
 
-    if (!API_KEY) {
-        console.warn('[aiCategorizer] EXPO_PUBLIC_CLAUDE_API_KEY missing. Skipping AI.');
+    if (!PROXY_URL) {
+        console.warn('[aiCategorizer] EXPO_PUBLIC_AI_PROXY_URL missing. Skipping AI.');
         if (onProgress) onProgress(1);
         return {};
     }
@@ -85,18 +89,19 @@ ${JSON.stringify(merchants)}`;
 
 
     try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        const headers = {
+            'Content-Type': 'application/json',
+        };
+        if (PROXY_SECRET) headers['x-proxy-secret'] = PROXY_SECRET;
+
+        const response = await fetch(PROXY_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': API_KEY,
-                'anthropic-version': '2023-06-01',
-            },
-        body: JSON.stringify({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 2000,
-            messages: [{ role: 'user', content: prompt }]
-        })
+            headers,
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-6',
+                max_tokens: 2000,
+                messages: [{ role: 'user', content: prompt }],
+            }),
         });
 
         if (!response.ok) {

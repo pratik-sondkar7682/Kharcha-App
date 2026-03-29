@@ -9,49 +9,286 @@ import {
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { useFocusEffect } from '@react-navigation/native';
-import { colors, type, radius, spacing, CATEGORIES } from '../theme';
+import { type, radius, spacing, CATEGORIES } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { useFilter } from '../context/FilterContext';
 import {
     monthlySummary, categoryBreakdown, dailyTrend, topMerchants,
     formatCurrency, getDateRange, DATE_RANGES,
     averageDailySpend, biggestTransactions, weekdayVsWeekend, getPreviousPeriodRange
 } from '../lib/analytics';
 import { getTransactions, updateTransaction } from '../lib/database';
-import { syncSMS } from '../lib/smsReader';
+import { syncSMS, hasSMSPermission, requestSMSPermission } from '../lib/smsReader';
 import TransactionCard from '../components/TransactionCard';
 
+const SAFE_TOP = Platform.OS === 'android' ? 48 : 56;
+
+function makeStyles(colors) {
+    return StyleSheet.create({
+        screen: { flex: 1, backgroundColor: colors.surface.base },
+        center: { justifyContent: 'center', alignItems: 'center' },
+        listContent: { paddingTop: SAFE_TOP, paddingBottom: 100 },
+        loadingText: { ...type.bodyM, color: colors.text.muted, marginTop: spacing.md },
+
+        syncBanner: {
+            position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
+            backgroundColor: colors.surface.containerHigh,
+            paddingTop: 10, paddingBottom: 14, paddingHorizontal: spacing.xl,
+            borderBottomWidth: 1, borderBottomColor: colors.outline.variant,
+        },
+        syncBannerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+        syncStatusText: { ...type.labelM, color: colors.text.body },
+        syncPct: { ...type.labelM, color: colors.primary.main, fontWeight: '700' },
+        progressTrack: { height: 4, backgroundColor: colors.outline.variant, borderRadius: 2, overflow: 'hidden' },
+        progressFill: { height: '100%', backgroundColor: colors.primary.main, borderRadius: 2 },
+
+        header: {
+            flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+            paddingHorizontal: spacing.xl, marginBottom: spacing.lg,
+        },
+        appTitle: { ...type.displayS, color: colors.text.headline },
+        appSubtitle: { ...type.bodyS, color: colors.text.muted, marginTop: 2 },
+        syncBtn: {
+            backgroundColor: colors.primary.container,
+            paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 1,
+            borderRadius: radius.full,
+        },
+        syncBtnText: { ...type.labelM, color: colors.primary.onContainer, fontWeight: '700' },
+
+        dateFilterRow: {
+            paddingHorizontal: spacing.xl,
+            paddingBottom: spacing.lg,
+            gap: spacing.sm,
+            flexDirection: 'row',
+        },
+        datePill: {
+            paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 1,
+            borderRadius: radius.full,
+            backgroundColor: colors.surface.containerHigh,
+            borderWidth: 1, borderColor: colors.outline.variant,
+        },
+        datePillActive: {
+            backgroundColor: colors.primary.container,
+            borderColor: colors.primary.main,
+        },
+        datePillText: { ...type.labelM, color: colors.text.secondary },
+        datePillTextActive: { color: colors.primary.onContainer, fontWeight: '700' },
+
+        heroCard: {
+            marginHorizontal: spacing.xl, marginBottom: spacing.xl,
+            backgroundColor: colors.surface.container,
+            borderRadius: radius.xl,
+            paddingTop: spacing.lg, paddingBottom: spacing.lg,
+            paddingHorizontal: spacing.xl,
+            borderWidth: 1, borderColor: colors.outline.default,
+            borderLeftWidth: 3, borderLeftColor: colors.expense,
+        },
+        heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+        heroLabel: { ...type.labelS, color: colors.text.muted, textTransform: 'uppercase', letterSpacing: 1 },
+        heroAmount: {
+            fontSize: 36, fontWeight: '800', color: colors.text.headline,
+            letterSpacing: -0.5, marginBottom: spacing.md,
+        },
+        momBadge: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.full },
+        momText: { ...type.labelS, fontWeight: '700', fontSize: 11 },
+        statsBar: {
+            flexDirection: 'row', alignItems: 'center',
+            backgroundColor: colors.surface.containerHigh,
+            borderRadius: radius.md, paddingVertical: spacing.md, paddingHorizontal: spacing.sm,
+        },
+        statItem: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
+        statDivider: { width: 1, height: 24, backgroundColor: colors.outline.variant },
+        statLabel: { ...type.labelS, color: colors.text.muted, marginBottom: 2, fontSize: 10 },
+        statValue: { fontSize: 14, fontWeight: '700', color: colors.text.headline },
+
+        feedTabsRow: {
+            flexDirection: 'row',
+            paddingHorizontal: spacing.xl,
+            marginBottom: spacing.md,
+            gap: spacing.sm,
+        },
+        feedTab: {
+            flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+            paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.lg,
+            borderRadius: radius.full,
+            backgroundColor: colors.surface.containerHigh,
+            borderWidth: 1, borderColor: 'transparent',
+        },
+        feedTabActive: {
+            backgroundColor: colors.surface.containerHighest,
+            borderColor: colors.outline.variant,
+        },
+        feedTabText: { ...type.labelL, color: colors.text.muted },
+        feedTabTextActive: { color: colors.text.headline, fontWeight: '700' },
+        badge: {
+            backgroundColor: colors.primary.main,
+            borderRadius: radius.full, minWidth: 18, height: 18,
+            alignItems: 'center', justifyContent: 'center',
+            paddingHorizontal: 5,
+        },
+        badgeText: { ...type.labelS, color: '#FFFFFF', fontWeight: '800', fontSize: 9 },
+
+        toolbar: {
+            flexDirection: 'row', paddingHorizontal: spacing.xl,
+            marginBottom: spacing.sm, gap: spacing.md, alignItems: 'center',
+        },
+        searchBox: {
+            flex: 1, flexDirection: 'row', alignItems: 'center',
+            backgroundColor: colors.surface.container,
+            borderRadius: radius.full, paddingHorizontal: spacing.lg,
+            height: 46, borderWidth: 1, borderColor: colors.outline.default,
+            gap: spacing.sm,
+        },
+        searchIcon: { fontSize: 15, color: colors.text.muted },
+        searchInput: { flex: 1, ...type.bodyM, color: colors.text.headline, paddingVertical: 0 },
+        clearIcon: { fontSize: 14, color: colors.text.muted, paddingLeft: spacing.sm },
+        filterIconBtn: {
+            width: 46, height: 46, borderRadius: radius.full,
+            backgroundColor: colors.surface.container,
+            justifyContent: 'center', alignItems: 'center',
+            borderWidth: 1, borderColor: colors.outline.default,
+        },
+        filterIconBtnActive: { borderColor: colors.primary.main, backgroundColor: colors.primary.container },
+        filterDot: {
+            position: 'absolute', top: 10, right: 10,
+            width: 7, height: 7, borderRadius: 4,
+            backgroundColor: colors.primary.main,
+            borderWidth: 1, borderColor: colors.surface.containerHigh,
+        },
+
+        feedMeta: {
+            ...type.labelS, color: colors.text.muted,
+            paddingHorizontal: spacing.xl, marginBottom: spacing.sm,
+        },
+
+        cardWrapper: { paddingHorizontal: spacing.xl },
+
+        emptyState: { alignItems: 'center', paddingTop: 60, paddingBottom: 40 },
+        emptyIcon: { fontSize: 48, marginBottom: spacing.lg },
+        emptyTitle: { ...type.headlineM, color: colors.text.secondary, marginBottom: spacing.sm },
+        emptySubtitle: { ...type.bodyM, color: colors.text.muted },
+
+        permDeniedWrap: {
+            flex: 1, justifyContent: 'center', alignItems: 'center',
+            paddingHorizontal: spacing.xxl + spacing.lg,
+        },
+        permDeniedIconWrap: {
+            width: 88, height: 88, borderRadius: radius.xxl,
+            backgroundColor: colors.surface.containerHigh,
+            justifyContent: 'center', alignItems: 'center',
+            marginBottom: spacing.xxl,
+        },
+        permDeniedEmoji: { fontSize: 40 },
+        permDeniedTitle: { ...type.headlineL, color: colors.text.headline, textAlign: 'center', marginBottom: spacing.md },
+        permDeniedBody: { ...type.bodyM, color: colors.text.muted, textAlign: 'center', lineHeight: 22, marginBottom: spacing.xxl + spacing.md },
+        permDeniedBtn: {
+            backgroundColor: colors.primary.main,
+            borderRadius: radius.full,
+            paddingVertical: spacing.lg,
+            paddingHorizontal: spacing.xxl + spacing.lg,
+            alignItems: 'center',
+        },
+        permDeniedBtnText: { ...type.labelL, fontSize: 15, color: '#FFFFFF', fontWeight: '700' },
+
+        overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+        bottomSheet: {
+            backgroundColor: colors.surface.containerHigh,
+            borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
+            paddingHorizontal: spacing.xxl, paddingBottom: spacing.xxxl + spacing.xl,
+            paddingTop: spacing.lg,
+            maxHeight: '82%',
+        },
+        sheetHandle: {
+            width: 40, height: 4, borderRadius: 2,
+            backgroundColor: colors.outline.variant,
+            alignSelf: 'center', marginBottom: spacing.xl,
+        },
+        sheetTitle: { ...type.headlineL, color: colors.text.headline, textAlign: 'center', marginBottom: spacing.xl },
+        sheetSectionLabel: { ...type.labelM, color: colors.text.secondary, marginBottom: spacing.sm, marginLeft: 2 },
+        sheetFooter: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl },
+
+        chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.xl },
+        chip: {
+            paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
+            borderRadius: radius.full,
+            backgroundColor: colors.surface.container,
+            borderWidth: 1, borderColor: colors.outline.default,
+        },
+        chipActive: { backgroundColor: colors.primary.main, borderColor: colors.primary.main },
+        chipText: { ...type.labelM, color: colors.text.secondary },
+        chipTextActive: { color: '#FFFFFF', fontWeight: '700' },
+
+        formInput: {
+            backgroundColor: colors.surface.container,
+            borderRadius: radius.lg, padding: spacing.lg,
+            color: colors.text.headline, ...type.bodyM,
+            marginBottom: spacing.lg,
+            borderWidth: 1, borderColor: colors.outline.default,
+        },
+        dateInputRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', marginBottom: spacing.sm },
+        calBtn: {
+            width: 50, height: 50, borderRadius: radius.lg,
+            backgroundColor: colors.surface.container,
+            borderWidth: 1, borderColor: colors.outline.default,
+            justifyContent: 'center', alignItems: 'center',
+        },
+
+        excludeRow: {
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+            paddingVertical: spacing.lg,
+            borderTopWidth: 1, borderTopColor: colors.outline.default,
+            marginBottom: spacing.lg,
+        },
+        excludeTitle: { ...type.headlineS, color: colors.text.headline },
+        excludeSub: { ...type.labelS, color: colors.text.muted, marginTop: 3 },
+
+        cancelBtn: {
+            flex: 1, alignItems: 'center', paddingVertical: spacing.lg,
+            borderRadius: radius.lg, backgroundColor: colors.surface.container,
+        },
+        cancelText: { ...type.labelL, color: colors.text.muted },
+        applyBtn: {
+            flex: 2, alignItems: 'center', paddingVertical: spacing.lg,
+            borderRadius: radius.lg, backgroundColor: colors.primary.main,
+        },
+        applyText: { ...type.labelL, color: '#FFFFFF', fontWeight: '800' },
+        resetLink: { justifyContent: 'center', paddingHorizontal: spacing.md },
+        resetText: { ...type.labelL, color: colors.expense },
+    });
+}
+
 export default function DashboardScreen() {
+    const { colors } = useTheme();
+    const st = makeStyles(colors);
+
     const [loading, setLoading]     = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [smsPermissionDenied, setSmsPermissionDenied] = useState(false);
 
-    // Core data
+    const { dateFilter, setDateFilter, customStart, setCustomStart, customEnd, setCustomEnd } = useFilter();
+
     const [transactions, setTransactions] = useState([]);
-    const [dateFilter, setDateFilter]     = useState('current_month');
     const [feedTab, setFeedTab]           = useState('transactions');
 
-    // Custom range
     const [customModal, setCustomModal]   = useState(false);
-    const [customStart, setCustomStart]   = useState('');
-    const [customEnd, setCustomEnd]       = useState('');
     const [showCalFor, setShowCalFor]     = useState(null);
 
-    // Analytics
     const [summary, setSummary]       = useState({ totalSpent: 0, totalReceived: 0, netFlow: 0, count: 0 });
     const [prevSummary, setPrevSummary] = useState(null);
     const [avgDaily, setAvgDaily]     = useState(0);
+    const [topCategory, setTopCategory] = useState(null);
+    const [biggestSpend, setBiggestSpend] = useState(null);
 
-    // Filter & sort
     const [searchQuery, setSearchQuery]   = useState('');
     const [filterCategory, setFilterCategory] = useState('all');
     const [sortField, setSortField]       = useState('date');
     const [sortOrder, setSortOrder]       = useState('DESC');
     const [showFilterModal, setShowFilterModal] = useState(false);
 
-    // Edit transaction
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingTxn, setEditingTxn]     = useState(null);
     const [editForm, setEditForm]         = useState({ merchant: '', category: '', note: '', isExcluded: false });
 
-    // Sync progress
     const [syncProgress, setSyncProgress] = useState(0);
     const [syncStatus, setSyncStatus]     = useState('');
 
@@ -66,17 +303,23 @@ export default function DashboardScreen() {
                 curStart = startDate; curEnd = endDate;
             }
 
-            const txns = await getTransactions({ startDate: curStart, endDate: curEnd }, 'date DESC', 1000);
+            const txns = await getTransactions({ startDate: curStart, endDate: curEnd }, 'date DESC', 5000);
             setTransactions(txns);
 
-            const analyticTxns = txns.filter(t => t.category !== 'internal_transfer');
+            const analyticTxns = txns.filter(t => t.category !== 'internal_transfer' && t.category !== 'credit_card');
             setSummary(monthlySummary(analyticTxns));
             setAvgDaily(averageDailySpend(analyticTxns, curStart, curEnd));
+
+            const catBreakdown = categoryBreakdown(analyticTxns);
+            setTopCategory(catBreakdown.length > 0 ? catBreakdown[0] : null);
+
+            const biggest = biggestTransactions(analyticTxns, 1);
+            setBiggestSpend(biggest.length > 0 ? biggest[0] : null);
 
             if (dateFilter !== 'all_time' && curStart && curEnd && dateFilter !== 'custom') {
                 const prev = getPreviousPeriodRange(curStart, curEnd);
                 const prevTxns = await getTransactions({ startDate: prev.startDate, endDate: prev.endDate }, 'date DESC', 5000);
-                setPrevSummary(monthlySummary(prevTxns.filter(t => t.category !== 'internal_transfer')));
+                setPrevSummary(monthlySummary(prevTxns.filter(t => t.category !== 'internal_transfer' && t.category !== 'credit_card')));
             } else {
                 setPrevSummary(null);
             }
@@ -109,6 +352,13 @@ export default function DashboardScreen() {
     };
 
     const handleSync = useCallback(async () => {
+        const hasPermission = await hasSMSPermission();
+        if (!hasPermission) {
+            setSmsPermissionDenied(true);
+            setLoading(false);
+            return;
+        }
+        setSmsPermissionDenied(false);
         setRefreshing(true);
         setSyncProgress(1);
         setSyncStatus('Starting sync…');
@@ -127,12 +377,20 @@ export default function DashboardScreen() {
         }
     }, [loadData]);
 
+    const handleGrantSMSAccess = useCallback(async () => {
+        const granted = await requestSMSPermission();
+        if (granted) {
+            setSmsPermissionDenied(false);
+            handleSync();
+        }
+    }, [handleSync]);
+
     useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
     useEffect(() => { handleSync(); }, []);
 
     const filteredTxns = React.useMemo(() => {
         let result = transactions.filter(t => {
-            const isUnaccounted = t.category === 'internal_transfer' || !!t.isExcluded;
+            const isUnaccounted = t.category === 'internal_transfer' || t.category === 'credit_card' || !!t.isExcluded;
             return feedTab === 'unaccounted' ? isUnaccounted : !isUnaccounted;
         });
         if (searchQuery) {
@@ -156,7 +414,7 @@ export default function DashboardScreen() {
     }, [transactions, feedTab, searchQuery, filterCategory, sortField, sortOrder]);
 
     const hasActiveFilters = filterCategory !== 'all' || sortField !== 'date' || sortOrder !== 'DESC';
-    const unaccountedCount = transactions.filter(t => t.category === 'internal_transfer' || !!t.isExcluded).length;
+    const unaccountedCount = transactions.filter(t => t.category === 'internal_transfer' || t.category === 'credit_card' || !!t.isExcluded).length;
 
     const momDelta = prevSummary && prevSummary.totalSpent > 0
         ? Math.round(Math.abs(((summary.totalSpent - prevSummary.totalSpent) / prevSummary.totalSpent) * 100))
@@ -168,7 +426,24 @@ export default function DashboardScreen() {
             <View style={[st.screen, st.center]}>
                 <Text style={{ fontSize: 44, marginBottom: spacing.lg }}>💰</Text>
                 <ActivityIndicator size="large" color={colors.primary.main} />
-                <Text style={[st.loadingText]}>Loading your transactions…</Text>
+                <Text style={st.loadingText}>Loading your transactions…</Text>
+            </View>
+        );
+    }
+
+    if (smsPermissionDenied && transactions.length === 0) {
+        return (
+            <View style={[st.screen, st.permDeniedWrap]}>
+                <View style={st.permDeniedIconWrap}>
+                    <Text style={st.permDeniedEmoji}>📩</Text>
+                </View>
+                <Text style={st.permDeniedTitle}>SMS access needed</Text>
+                <Text style={st.permDeniedBody}>
+                    Kharcha reads your bank SMS messages to track transactions automatically. No personal or OTP messages are ever read.
+                </Text>
+                <TouchableOpacity style={st.permDeniedBtn} onPress={handleGrantSMSAccess} activeOpacity={0.8}>
+                    <Text style={st.permDeniedBtnText}>Grant SMS Access</Text>
+                </TouchableOpacity>
             </View>
         );
     }
@@ -176,7 +451,6 @@ export default function DashboardScreen() {
     return (
         <View style={st.screen}>
 
-            {/* ── Sync Progress Banner ── */}
             {syncProgress > 0 && (
                 <View style={st.syncBanner}>
                     <View style={st.syncBannerRow}>
@@ -205,7 +479,6 @@ export default function DashboardScreen() {
 
                 ListHeaderComponent={
                     <View>
-                        {/* ── App Header ── */}
                         <View style={st.header}>
                             <View>
                                 <Text style={st.appTitle}>Kharcha</Text>
@@ -218,7 +491,6 @@ export default function DashboardScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* ── Date Filter Pills ── */}
                         <ScrollView
                             horizontal
                             showsHorizontalScrollIndicator={false}
@@ -244,11 +516,9 @@ export default function DashboardScreen() {
                             })}
                         </ScrollView>
 
-                        {/* ── Hero Card ── */}
                         <View style={st.heroCard}>
-                            {/* Total Spent */}
                             <View style={st.heroTopRow}>
-                                <Text style={st.heroLabel}>Total Spent</Text>
+                                <Text style={st.heroLabel}>TOTAL SPENT</Text>
                                 {momDelta !== null && (
                                     <View style={[st.momBadge, { backgroundColor: momUp ? colors.expense + '22' : colors.income + '22' }]}>
                                         <Text style={[st.momText, { color: momUp ? colors.expense : colors.income }]}>
@@ -257,32 +527,44 @@ export default function DashboardScreen() {
                                     </View>
                                 )}
                             </View>
-                            <Text style={st.heroAmount} adjustsFontSizeToFit numberOfLines={1}>
+
+                            <Text style={st.heroAmount} adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.6}>
                                 {formatCurrency(summary.totalSpent)}
                             </Text>
 
-                            {/* Stats bar */}
                             <View style={st.statsBar}>
                                 <View style={st.statItem}>
                                     <Text style={st.statLabel}>Avg / Day</Text>
-                                    <Text style={st.statValue}>{formatCurrency(avgDaily)}</Text>
+                                    <Text style={st.statValue} adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.7}>
+                                        {formatCurrency(avgDaily)}
+                                    </Text>
                                 </View>
                                 <View style={st.statDivider} />
                                 <View style={st.statItem}>
-                                    <Text style={st.statLabel}>Transactions</Text>
-                                    <Text style={st.statValue}>{summary.count}</Text>
+                                    <Text style={st.statLabel}>Top Category</Text>
+                                    {topCategory ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                                            <Text style={st.statValue} numberOfLines={1}>
+                                                {CATEGORIES[topCategory.category]?.icon ?? '❓'}
+                                            </Text>
+                                            <Text style={[st.statValue, { color: colors.primary.main }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                                                {topCategory.percentage}%
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        <Text style={st.statValue}>—</Text>
+                                    )}
                                 </View>
                                 <View style={st.statDivider} />
                                 <View style={st.statItem}>
-                                    <Text style={st.statLabel}>Net Flow</Text>
-                                    <Text style={[st.statValue, { color: summary.netFlow >= 0 ? colors.income : colors.expense }]}>
-                                        {formatCurrency(Math.abs(summary.netFlow))}
+                                    <Text style={st.statLabel}>Biggest</Text>
+                                    <Text style={[st.statValue, { color: colors.expense }]} adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.7}>
+                                        {biggestSpend ? formatCurrency(biggestSpend.amount) : '—'}
                                     </Text>
                                 </View>
                             </View>
                         </View>
 
-                        {/* ── Feed Tabs ── */}
                         <View style={st.feedTabsRow}>
                             {[
                                 { id: 'transactions', label: 'Transactions' },
@@ -309,7 +591,6 @@ export default function DashboardScreen() {
                             })}
                         </View>
 
-                        {/* ── Search + Filter Toolbar ── */}
                         <View style={st.toolbar}>
                             <View style={st.searchBox}>
                                 <Text style={st.searchIcon}>🔍</Text>
@@ -337,7 +618,6 @@ export default function DashboardScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* ── Feed meta ── */}
                         <Text style={st.feedMeta}>
                             {feedTab === 'unaccounted'
                                 ? `${filteredTxns.length} unaccounted items`
@@ -569,7 +849,7 @@ export default function DashboardScreen() {
                                 value={editForm.isExcluded}
                                 onValueChange={(val) => setEditForm(f => ({ ...f, isExcluded: val }))}
                                 trackColor={{ false: colors.surface.containerHigh, true: colors.primary.main }}
-                                thumbColor={editForm.isExcluded ? '#fff' : colors.text.muted}
+                                thumbColor={editForm.isExcluded ? '#FFFFFF' : colors.text.muted}
                             />
                         </View>
                     </ScrollView>
@@ -587,225 +867,3 @@ export default function DashboardScreen() {
         </View>
     );
 }
-
-const SAFE_TOP = Platform.OS === 'android' ? 48 : 56;
-
-const st = StyleSheet.create({
-    screen: { flex: 1, backgroundColor: colors.surface.base },
-    center: { justifyContent: 'center', alignItems: 'center' },
-    listContent: { paddingTop: SAFE_TOP, paddingBottom: 100 },
-    loadingText: { ...type.bodyM, color: colors.text.muted, marginTop: spacing.md },
-
-    // ── Sync Banner ──
-    syncBanner: {
-        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
-        backgroundColor: colors.surface.containerHigh,
-        paddingTop: 10, paddingBottom: 14, paddingHorizontal: spacing.xl,
-        borderBottomWidth: 1, borderBottomColor: colors.outline.variant,
-    },
-    syncBannerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-    syncStatusText: { ...type.labelM, color: colors.text.body },
-    syncPct: { ...type.labelM, color: colors.primary.main, fontWeight: '700' },
-    progressTrack: { height: 4, backgroundColor: colors.outline.variant, borderRadius: 2, overflow: 'hidden' },
-    progressFill: { height: '100%', backgroundColor: colors.primary.main, borderRadius: 2 },
-
-    // ── Header ──
-    header: {
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-        paddingHorizontal: spacing.xl, marginBottom: spacing.lg,
-    },
-    appTitle: { ...type.displayS, color: colors.text.headline },
-    appSubtitle: { ...type.bodyS, color: colors.text.muted, marginTop: 2 },
-    syncBtn: {
-        backgroundColor: colors.primary.container,
-        paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 1,
-        borderRadius: radius.full,
-    },
-    syncBtnText: { ...type.labelM, color: colors.primary.onContainer, fontWeight: '700' },
-
-    // ── Date Filter ──
-    dateFilterRow: {
-        paddingHorizontal: spacing.xl,
-        paddingBottom: spacing.lg,
-        gap: spacing.sm,
-        flexDirection: 'row',
-    },
-    datePill: {
-        paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 1,
-        borderRadius: radius.full,
-        backgroundColor: colors.surface.containerHigh,
-        borderWidth: 1, borderColor: colors.outline.variant,
-    },
-    datePillActive: {
-        backgroundColor: colors.primary.container,
-        borderColor: colors.primary.main,
-    },
-    datePillText: { ...type.labelM, color: colors.text.secondary },
-    datePillTextActive: { color: colors.primary.onContainer, fontWeight: '700' },
-
-    // ── Hero Card ──
-    heroCard: {
-        marginHorizontal: spacing.xl, marginBottom: spacing.xl,
-        backgroundColor: colors.surface.container,
-        borderRadius: radius.xl, padding: spacing.xxl,
-        borderWidth: 1, borderColor: colors.outline.default,
-        borderLeftWidth: 3, borderLeftColor: colors.expense,
-        boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
-    },
-    heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs },
-    heroLabel: { ...type.labelM, color: colors.text.muted, textTransform: 'uppercase', letterSpacing: 0.8 },
-    heroAmount: { ...type.displayM, color: colors.text.headline, fontWeight: '800', marginBottom: spacing.xl },
-    momBadge: { paddingHorizontal: spacing.md, paddingVertical: 3, borderRadius: radius.full },
-    momText: { ...type.labelS, fontWeight: '700' },
-    statsBar: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: colors.surface.containerHigh,
-        borderRadius: radius.lg, padding: spacing.lg,
-    },
-    statItem: { flex: 1, alignItems: 'center' },
-    statDivider: { width: 1, height: 28, backgroundColor: colors.outline.variant },
-    statLabel: { ...type.labelS, color: colors.text.muted, marginBottom: 3 },
-    statValue: { ...type.headlineS, color: colors.text.headline, fontWeight: '700' },
-
-    // ── Feed Tabs ──
-    feedTabsRow: {
-        flexDirection: 'row',
-        paddingHorizontal: spacing.xl,
-        marginBottom: spacing.md,
-        gap: spacing.sm,
-    },
-    feedTab: {
-        flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-        paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.lg,
-        borderRadius: radius.full,
-        backgroundColor: colors.surface.containerHigh,
-        borderWidth: 1, borderColor: 'transparent',
-    },
-    feedTabActive: {
-        backgroundColor: colors.surface.containerHighest,
-        borderColor: colors.outline.variant,
-    },
-    feedTabText: { ...type.labelL, color: colors.text.muted },
-    feedTabTextActive: { color: colors.text.headline, fontWeight: '700' },
-    badge: {
-        backgroundColor: colors.primary.main,
-        borderRadius: radius.full, minWidth: 18, height: 18,
-        alignItems: 'center', justifyContent: 'center',
-        paddingHorizontal: 5,
-    },
-    badgeText: { ...type.labelS, color: colors.surface.base, fontWeight: '800', fontSize: 9 },
-
-    // ── Toolbar ──
-    toolbar: {
-        flexDirection: 'row', paddingHorizontal: spacing.xl,
-        marginBottom: spacing.sm, gap: spacing.md, alignItems: 'center',
-    },
-    searchBox: {
-        flex: 1, flexDirection: 'row', alignItems: 'center',
-        backgroundColor: colors.surface.container,
-        borderRadius: radius.full, paddingHorizontal: spacing.lg,
-        height: 46, borderWidth: 1, borderColor: colors.outline.default,
-        gap: spacing.sm,
-    },
-    searchIcon: { fontSize: 15, color: colors.text.muted },
-    searchInput: { flex: 1, ...type.bodyM, color: colors.text.headline, paddingVertical: 0 },
-    clearIcon: { fontSize: 14, color: colors.text.muted, paddingLeft: spacing.sm },
-    filterIconBtn: {
-        width: 46, height: 46, borderRadius: radius.full,
-        backgroundColor: colors.surface.container,
-        justifyContent: 'center', alignItems: 'center',
-        borderWidth: 1, borderColor: colors.outline.default,
-    },
-    filterIconBtnActive: { borderColor: colors.primary.main, backgroundColor: colors.primary.container },
-    filterDot: {
-        position: 'absolute', top: 10, right: 10,
-        width: 7, height: 7, borderRadius: 4,
-        backgroundColor: colors.primary.main,
-        borderWidth: 1, borderColor: colors.surface.containerHigh,
-    },
-
-    // ── Feed meta ──
-    feedMeta: {
-        ...type.labelS, color: colors.text.muted,
-        paddingHorizontal: spacing.xl, marginBottom: spacing.sm,
-    },
-
-    // ── Transaction card wrapper ──
-    cardWrapper: { paddingHorizontal: spacing.xl },
-
-    // ── Empty state ──
-    emptyState: { alignItems: 'center', paddingTop: 60, paddingBottom: 40 },
-    emptyIcon: { fontSize: 48, marginBottom: spacing.lg },
-    emptyTitle: { ...type.headlineM, color: colors.text.secondary, marginBottom: spacing.sm },
-    emptySubtitle: { ...type.bodyM, color: colors.text.muted },
-
-    // ── Bottom Sheet (shared by all modals) ──
-    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
-    bottomSheet: {
-        backgroundColor: colors.surface.containerHigh,
-        borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
-        paddingHorizontal: spacing.xxl, paddingBottom: spacing.xxxl + spacing.xl,
-        paddingTop: spacing.lg,
-        maxHeight: '82%',
-    },
-    sheetHandle: {
-        width: 40, height: 4, borderRadius: 2,
-        backgroundColor: colors.outline.variant,
-        alignSelf: 'center', marginBottom: spacing.xl,
-    },
-    sheetTitle: { ...type.headlineL, color: colors.text.headline, textAlign: 'center', marginBottom: spacing.xl },
-    sheetSectionLabel: { ...type.labelM, color: colors.text.secondary, marginBottom: spacing.sm, marginLeft: 2 },
-    sheetFooter: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl },
-
-    // ── Chips ──
-    chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.xl },
-    chip: {
-        paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
-        borderRadius: radius.full,
-        backgroundColor: colors.surface.container,
-        borderWidth: 1, borderColor: colors.outline.default,
-    },
-    chipActive: { backgroundColor: colors.primary.main, borderColor: colors.primary.main },
-    chipText: { ...type.labelM, color: colors.text.secondary },
-    chipTextActive: { color: colors.surface.base, fontWeight: '700' },
-
-    // ── Form inputs ──
-    formInput: {
-        backgroundColor: colors.surface.container,
-        borderRadius: radius.lg, padding: spacing.lg,
-        color: colors.text.headline, ...type.bodyM,
-        marginBottom: spacing.lg,
-        borderWidth: 1, borderColor: colors.outline.default,
-    },
-    dateInputRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', marginBottom: spacing.sm },
-    calBtn: {
-        width: 50, height: 50, borderRadius: radius.lg,
-        backgroundColor: colors.surface.container,
-        borderWidth: 1, borderColor: colors.outline.default,
-        justifyContent: 'center', alignItems: 'center',
-    },
-
-    // ── Exclude row ──
-    excludeRow: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingVertical: spacing.lg,
-        borderTopWidth: 1, borderTopColor: colors.outline.default,
-        marginBottom: spacing.lg,
-    },
-    excludeTitle: { ...type.headlineS, color: colors.text.headline },
-    excludeSub: { ...type.labelS, color: colors.text.muted, marginTop: 3 },
-
-    // ── Buttons ──
-    cancelBtn: {
-        flex: 1, alignItems: 'center', paddingVertical: spacing.lg,
-        borderRadius: radius.lg, backgroundColor: colors.surface.container,
-    },
-    cancelText: { ...type.labelL, color: colors.text.muted },
-    applyBtn: {
-        flex: 2, alignItems: 'center', paddingVertical: spacing.lg,
-        borderRadius: radius.lg, backgroundColor: colors.primary.main,
-    },
-    applyText: { ...type.labelL, color: colors.surface.base, fontWeight: '800' },
-    resetLink: { justifyContent: 'center', paddingHorizontal: spacing.md },
-    resetText: { ...type.labelL, color: colors.expense },
-});
