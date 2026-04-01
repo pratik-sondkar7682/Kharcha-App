@@ -7,10 +7,12 @@ import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     ActivityIndicator, Modal, TextInput, Switch, Alert, Platform
 } from 'react-native';
-import { Calendar } from 'react-native-calendars';
+import DateRangePickerModal from '../components/DateRangePickerModal';
 import { useFocusEffect } from '@react-navigation/native';
 import Svg, { Path, G } from 'react-native-svg';
-import { colors, type, radius, spacing, CATEGORIES } from '../theme';
+import { type, radius, spacing, CATEGORIES } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { useFilter } from '../context/FilterContext';
 import {
     monthlySummary, categoryBreakdown, dailyTrend, topMerchants,
     formatCurrency, getDateRange, DATE_RANGES, getPreviousPeriodRange,
@@ -19,7 +21,7 @@ import {
 import { getTransactions, updateTransaction, saveUserOverride } from '../lib/database';
 
 // ── Horizontal scrollable bar chart ──────────────────────────────────────────
-function SpendingBars({ data, height = 130, onBarPress, selectedDate }) {
+function SpendingBars({ data, height = 130, onBarPress, selectedDate, colors }) {
     const max = Math.max(...data.map(d => d.value), 1);
     return (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 8 }}>
@@ -47,7 +49,7 @@ function SpendingBars({ data, height = 130, onBarPress, selectedDate }) {
 }
 
 // ── SVG Donut chart ───────────────────────────────────────────────────────────
-function SvgDonut({ data, size = 178, thickness = 24, onSlicePress, selectedCategory, isFaded }) {
+function SvgDonut({ data, size = 178, thickness = 24, onSlicePress, selectedCategory, isFaded, colors }) {
     const total  = data.reduce((sum, d) => sum + Math.abs(d.value), 0) || 1;
     const center = size / 2;
     const r      = size / 2 - thickness / 2;
@@ -87,12 +89,12 @@ function SvgDonut({ data, size = 178, thickness = 24, onSlicePress, selectedCate
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
 export default function InsightsScreen() {
+    const { colors } = useTheme();
+    const st = makeStyles(colors);
+
     const [loading, setLoading]             = useState(true);
-    const [dateFilter, setDateFilter]       = useState('current_month');
+    const { dateFilter, setDateFilter, customStart, setCustomStart, customEnd, setCustomEnd } = useFilter();
     const [customModal, setCustomModal]     = useState(false);
-    const [customStart, setCustomStart]     = useState('');
-    const [customEnd, setCustomEnd]         = useState('');
-    const [showCalFor, setShowCalFor]       = useState(null);
 
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedDate, setSelectedDate]         = useState(null);
@@ -111,6 +113,8 @@ export default function InsightsScreen() {
     const [avgDaily, setAvgDaily]       = useState(0);
     const [anomalies, setAnomalies]     = useState([]);
     const [behavior, setBehavior]       = useState(null);
+    const [mostFrequent, setMostFrequent] = useState(null); // { merchant, count }
+    const [showAllMerchants, setShowAllMerchants] = useState(false);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -124,7 +128,7 @@ export default function InsightsScreen() {
             }
 
             let rawTxns = await getTransactions({ startDate: curStart, endDate: curEnd }, 'date DESC', 5000);
-            rawTxns = rawTxns.filter(t => t.category !== 'internal_transfer');
+            rawTxns = rawTxns.filter(t => t.category !== 'internal_transfer' && t.category !== 'credit_card');
             setAllTxns(rawTxns);
 
             // Pacing: respects category filter, not date
@@ -148,9 +152,19 @@ export default function InsightsScreen() {
             setAnomalies(biggestTransactions(strict, 3));
             setBehavior(weekdayVsWeekend(strict));
 
+            const freqMap = {};
+            strict.filter(t => t.type === 'debit' && !t.isExcluded && t.merchant).forEach(t => {
+                if (!freqMap[t.merchant]) freqMap[t.merchant] = { count: 0, totalSpent: 0 };
+                freqMap[t.merchant].count++;
+                freqMap[t.merchant].totalSpent += t.amount;
+            });
+            const topFreq = Object.entries(freqMap).sort((a, b) => b[1].count - a[1].count)[0];
+            setMostFrequent(topFreq ? { merchant: topFreq[0], count: topFreq[1].count, totalSpent: topFreq[1].totalSpent } : null);
+
             if (dateFilter !== 'all_time' && curStart && curEnd && dateFilter !== 'custom') {
                 const prev = getPreviousPeriodRange(curStart, curEnd);
                 let prevTxns = await getTransactions({ startDate: prev.startDate, endDate: prev.endDate }, 'date DESC', 5000);
+                prevTxns = prevTxns.filter(t => t.category !== 'internal_transfer' && t.category !== 'credit_card');
                 if (selectedCategory) prevTxns = prevTxns.filter(t => t.category === selectedCategory);
                 if (selectedDate)     prevTxns = prevTxns.filter(t => t.date.startsWith(selectedDate));
                 setPrevSummary(monthlySummary(prevTxns));
@@ -196,7 +210,7 @@ export default function InsightsScreen() {
 
     const pieData = categories.map(c => ({
         value: Math.abs(c.amount),
-        color: CATEGORIES[c.category]?.color || colors.text.muted,
+        color: colors.category[c.category] || colors.text.muted,
         category: c.category,
     }));
 
@@ -209,10 +223,8 @@ export default function InsightsScreen() {
         return DATE_RANGES.find(r => r.id === dateFilter)?.label ?? '';
     })();
 
-    const momSpentDelta  = prevSummary?.totalSpent  > 0 ? Math.round(Math.abs(((summary.totalSpent  - prevSummary.totalSpent)  / prevSummary.totalSpent)  * 100)) : null;
-    const momSpentUp     = prevSummary && summary.totalSpent  > prevSummary.totalSpent;
-    const momIncDelta    = prevSummary?.totalReceived > 0 ? Math.round(Math.abs(((summary.totalReceived - prevSummary.totalReceived) / prevSummary.totalReceived) * 100)) : null;
-    const momIncUp       = prevSummary && summary.totalReceived > prevSummary.totalReceived;
+    const momSpentDelta = prevSummary?.totalSpent > 0 ? Math.round(Math.abs(((summary.totalSpent - prevSummary.totalSpent) / prevSummary.totalSpent) * 100)) : null;
+    const momSpentUp    = prevSummary && summary.totalSpent > prevSummary.totalSpent;
 
     const SAFE_TOP = Platform.OS === 'android' ? 48 : 56;
 
@@ -261,74 +273,89 @@ export default function InsightsScreen() {
                 </View>
             ) : (
                 <>
-                    {/* ── Hero Cards ── */}
-                    <View style={st.heroRow}>
-                        {/* Spent */}
-                        <View style={[st.heroCard, { borderLeftColor: colors.expense }]}>
-                            <Text style={st.heroLabel}>{selectedCategory ? 'Category Spend' : selectedDate ? 'Daily Spend' : 'Total Spent'}</Text>
-                            <Text style={st.heroAmount} adjustsFontSizeToFit numberOfLines={1}>{formatCurrency(summary.totalSpent)}</Text>
+                    {/* ── Hero Card (full-width Total Spent) ── */}
+                    <View style={[st.heroCard, st.heroCardFull, { borderLeftColor: colors.expense }]}>
+                        <Text style={st.heroLabel}>{selectedCategory ? 'Category Spend' : selectedDate ? 'Daily Spend' : 'Total Spent'}</Text>
+                        <Text style={st.heroAmount} adjustsFontSizeToFit numberOfLines={1}>{formatCurrency(summary.totalSpent)}</Text>
+                        <View style={st.heroFooterRow}>
                             {momSpentDelta !== null ? (
                                 <View style={[st.momPill, { backgroundColor: momSpentUp ? colors.expense + '22' : colors.income + '22' }]}>
                                     <Text style={[st.momText, { color: momSpentUp ? colors.expense : colors.income }]}>
                                         {momSpentUp ? '↑' : '↓'} {momSpentDelta}% vs prev
                                     </Text>
                                 </View>
-                            ) : (
-                                <Text style={st.heroMeta}>{summary.count} transactions</Text>
-                            )}
-                        </View>
-
-                        {/* Income / txn count */}
-                        <View style={[st.heroCard, { borderLeftColor: colors.income }]}>
-                            {selectedCategory ? (
-                                <>
-                                    <Text style={st.heroLabel}>Transactions</Text>
-                                    <Text style={st.heroAmount} adjustsFontSizeToFit numberOfLines={1}>{summary.count}</Text>
-                                    <Text style={st.heroMeta}>{summary.count > 0 ? `avg ${formatCurrency(Math.round(summary.totalSpent / summary.count))}` : 'no data'}</Text>
-                                </>
-                            ) : (
-                                <>
-                                    <Text style={st.heroLabel}>{selectedDate ? 'Daily Income' : 'Income'}</Text>
-                                    <Text style={st.heroAmount} adjustsFontSizeToFit numberOfLines={1}>{formatCurrency(summary.totalReceived)}</Text>
-                                    {momIncDelta !== null ? (
-                                        <View style={[st.momPill, { backgroundColor: momIncUp ? colors.income + '22' : colors.expense + '22' }]}>
-                                            <Text style={[st.momText, { color: momIncUp ? colors.income : colors.expense }]}>
-                                                {momIncUp ? '↑' : '↓'} {momIncDelta}% vs prev
-                                            </Text>
-                                        </View>
-                                    ) : (
-                                        <Text style={st.heroMeta}>{summary.count} txns</Text>
-                                    )}
-                                </>
+                            ) : null}
+                            <Text style={st.heroMeta}>{summary.count} transaction{summary.count !== 1 ? 's' : ''}</Text>
+                            {summary.count > 0 && (
+                                <Text style={st.heroMeta}>avg {formatCurrency(Math.round(summary.totalSpent / summary.count))} / txn</Text>
                             )}
                         </View>
                     </View>
 
-                    {/* ── Quick Insights Grid ── */}
+                    {/* ── Quick Insights Grid (2×2) ── */}
                     <View style={st.insightGrid}>
+                        {/* Avg / Day */}
                         <View style={st.insightCard}>
-                            <Text style={st.insightIcon}>⏱</Text>
+                            <Text style={st.insightIcon}>📅</Text>
                             <Text style={st.insightValue} adjustsFontSizeToFit numberOfLines={1}>{formatCurrency(avgDaily)}</Text>
                             <Text style={st.insightLabel}>Avg / day</Text>
                         </View>
+
+                        {/* Most Frequent */}
                         <View style={st.insightCard}>
-                            <Text style={st.insightIcon}>{behavior?.weekendPct > behavior?.weekdayPct ? '🏖' : '💼'}</Text>
-                            <Text style={st.insightValue}>{behavior?.weekendPct ?? 0}%</Text>
-                            <Text style={st.insightLabel}>Weekend spend</Text>
+                            <Text style={st.insightIcon}>🔁</Text>
+                            {mostFrequent ? (
+                                <>
+                                    <Text style={st.insightValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                                        {mostFrequent.merchant}
+                                    </Text>
+                                    <Text style={st.insightLabel} numberOfLines={1}>
+                                        Most visited · {mostFrequent.count} visits
+                                    </Text>
+                                    <Text style={st.insightLabel} numberOfLines={1}>
+                                        avg {formatCurrency(Math.round(mostFrequent.totalSpent / mostFrequent.count))} / visit
+                                    </Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={st.insightValue}>—</Text>
+                                    <Text style={st.insightLabel}>Most visited merchant</Text>
+                                </>
+                            )}
                         </View>
-                        {anomalies[0] ? (
-                            <View style={[st.insightCard, st.insightCardWide]}>
-                                <View style={st.anomalyInner}>
-                                    <View style={st.anomalyIconWrap}>
-                                        <Text style={{ fontSize: 20 }}>🚨</Text>
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={[st.insightValue, { color: colors.expense }]} adjustsFontSizeToFit numberOfLines={1}>{formatCurrency(anomalies[0].amount)}</Text>
-                                        <Text style={st.insightLabel}>Largest transaction</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        ) : null}
+
+                        {/* Largest Transaction */}
+                        <View style={st.insightCard}>
+                            <Text style={st.insightIcon}>🚨</Text>
+                            <Text style={st.insightValue} adjustsFontSizeToFit numberOfLines={1}>
+                                {anomalies[0] ? anomalies[0].merchant || 'Unknown' : '—'}
+                            </Text>
+                            <Text style={[st.insightLabel, anomalies[0] && { color: colors.expense }]} numberOfLines={1}>
+                                {anomalies[0] ? `Biggest · ${formatCurrency(anomalies[0].amount)}` : 'Largest transaction'}
+                            </Text>
+                        </View>
+
+                        {/* Top Category */}
+                        <View style={st.insightCard}>
+                            {categories[0] ? (
+                                <>
+                                    <Text style={st.insightIcon}>{CATEGORIES[categories[0].category]?.icon || '🗂️'}</Text>
+                                    <Text style={[st.insightValue, { color: colors.category[categories[0].category] || colors.text.headline }]} adjustsFontSizeToFit numberOfLines={1}>
+                                        {formatCurrency(categories[0].amount)}
+                                    </Text>
+                                    <Text style={st.insightLabel} numberOfLines={1}>
+                                        Top: {CATEGORIES[categories[0].category]?.label || categories[0].category} · {categories[0].percentage}%
+                                    </Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Text style={st.insightIcon}>🗂️</Text>
+                                    <Text style={st.insightValue}>—</Text>
+                                    <Text style={st.insightLabel}>Top category</Text>
+                                </>
+                            )}
+                        </View>
+
                     </View>
 
                     {/* ── Category Donut ── */}
@@ -346,6 +373,7 @@ export default function InsightsScreen() {
                                     onSlicePress={(d) => toggleCategory(d.category)}
                                     selectedCategory={selectedCategory}
                                     isFaded={!!selectedDate}
+                                    colors={colors}
                                 />
                             </View>
                             <View style={st.legend}>
@@ -360,7 +388,7 @@ export default function InsightsScreen() {
                                             onPress={() => toggleCategory(c.category)}
                                             activeOpacity={0.7}
                                         >
-                                            <View style={[st.legendDot, { backgroundColor: cat.color }]} />
+                                            <View style={[st.legendDot, { backgroundColor: colors.category[c.category] || colors.text.muted }]} />
                                             <Text style={st.legendLabel} numberOfLines={1}>{cat.icon} {cat.label}</Text>
                                             <Text style={st.legendPct}>{pct}%</Text>
                                             <Text style={st.legendAmt}>{formatCurrency(c.amount)}</Text>
@@ -386,7 +414,7 @@ export default function InsightsScreen() {
                                 )}
                             </View>
                             <View style={{ marginTop: spacing.md }}>
-                                <SpendingBars data={barData} selectedDate={selectedDate} onBarPress={toggleDate} />
+                                <SpendingBars data={barData} selectedDate={selectedDate} onBarPress={toggleDate} colors={colors} />
                             </View>
                         </View>
                     )}
@@ -399,59 +427,80 @@ export default function InsightsScreen() {
                                 <Text style={st.sectionHint}>Tap to expand</Text>
                             </View>
 
-                            {merchants.map((m, i) => {
-                                const cat      = CATEGORIES[m.category] || CATEGORIES.uncategorized;
-                                const isExp    = expandedMerchant === m.merchant;
-                                const mTxns    = allTxns.filter(t =>
-                                    t.merchant === m.merchant &&
-                                    (!selectedCategory || t.category === selectedCategory) &&
-                                    (!selectedDate || t.date.startsWith(selectedDate))
-                                );
-                                if (mTxns.length === 0) return null;
-
+                            {(() => {
+                                const totalSpend = merchants.reduce((s, m) => s + m.amount, 0);
+                                const visible = showAllMerchants ? merchants : merchants.slice(0, 5);
                                 return (
-                                    <View key={m.merchant} style={st.merchantBlock}>
-                                        <View style={st.merchantRow}>
+                                    <>
+                                        {visible.map((m, i) => {
+                                            const cat   = CATEGORIES[m.category] || CATEGORIES.uncategorized;
+                                            const isExp = expandedMerchant === m.merchant;
+                                            const mTxns = allTxns.filter(t =>
+                                                t.merchant === m.merchant &&
+                                                (!selectedCategory || t.category === selectedCategory) &&
+                                                (!selectedDate || t.date.startsWith(selectedDate))
+                                            );
+                                            const pct = totalSpend > 0 ? Math.round((m.amount / totalSpend) * 100) : 0;
+                                            if (mTxns.length === 0) return null;
+
+                                            return (
+                                                <View key={m.merchant} style={st.merchantBlock}>
+                                                    <View style={st.merchantRow}>
+                                                        <TouchableOpacity
+                                                            style={st.merchantLeft}
+                                                            onPress={() => setExpandedMerchant(isExp ? null : m.merchant)}
+                                                            activeOpacity={0.7}
+                                                        >
+                                                            <View style={[st.rankBadge, i === 0 && st.rankBadgeTop]}>
+                                                                <Text style={[st.rankText, i === 0 && { color: colors.primary.main }]}>{i + 1}</Text>
+                                                            </View>
+                                                            <View style={st.merchantInfo}>
+                                                                <Text style={st.merchantName} numberOfLines={1}>{m.merchant}</Text>
+                                                                <Text style={st.merchantMeta}>{cat.icon} {mTxns.length} txn{mTxns.length !== 1 ? 's' : ''} · {pct}% of spend</Text>
+                                                            </View>
+                                                        </TouchableOpacity>
+                                                        <Text style={st.merchantAmt}>{formatCurrency(m.amount)}</Text>
+                                                        <TouchableOpacity style={st.editMerchantBtn} onPress={() => handleMerchantEditPress(m, mTxns)} activeOpacity={0.7}>
+                                                            <Text style={{ fontSize: 14 }}>✏️</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+
+                                                    {isExp && (
+                                                        <View style={st.merchantTxnList}>
+                                                            {mTxns.slice(0, 15).map((t, idx) => (
+                                                                <View key={String(t.id ?? idx)} style={st.miniTxnRow}>
+                                                                    <Text style={st.miniTxnDate}>
+                                                                        {new Date(t.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                                                    </Text>
+                                                                    <Text style={st.miniTxnCat}>{CATEGORIES[t.category]?.icon}</Text>
+                                                                    <Text style={[st.miniTxnAmt, { color: t.type === 'debit' ? colors.expense : colors.income }]}>
+                                                                        {t.type === 'debit' ? '−' : '+'}{formatCurrency(t.amount)}
+                                                                    </Text>
+                                                                </View>
+                                                            ))}
+                                                            {mTxns.length > 15 && (
+                                                                <Text style={st.moreTxns}>+{mTxns.length - 15} more</Text>
+                                                            )}
+                                                        </View>
+                                                    )}
+                                                </View>
+                                            );
+                                        })}
+
+                                        {merchants.length > 5 && (
                                             <TouchableOpacity
-                                                style={st.merchantLeft}
-                                                onPress={() => setExpandedMerchant(isExp ? null : m.merchant)}
+                                                style={st.showAllBtn}
+                                                onPress={() => setShowAllMerchants(p => !p)}
                                                 activeOpacity={0.7}
                                             >
-                                                <View style={[st.rankBadge, i === 0 && st.rankBadgeTop]}>
-                                                    <Text style={[st.rankText, i === 0 && { color: colors.primary.main }]}>{i + 1}</Text>
-                                                </View>
-                                                <View style={st.merchantInfo}>
-                                                    <Text style={st.merchantName} numberOfLines={1}>{m.merchant}</Text>
-                                                    <Text style={st.merchantMeta}>{cat.icon} {mTxns.length} transaction{mTxns.length !== 1 ? 's' : ''}</Text>
-                                                </View>
+                                                <Text style={st.showAllText}>
+                                                    {showAllMerchants ? 'Show less' : `Show all ${merchants.length} merchants`}
+                                                </Text>
                                             </TouchableOpacity>
-                                            <Text style={st.merchantAmt}>{formatCurrency(m.amount)}</Text>
-                                            <TouchableOpacity style={st.editMerchantBtn} onPress={() => handleMerchantEditPress(m, mTxns)} activeOpacity={0.7}>
-                                                <Text style={{ fontSize: 14 }}>✏️</Text>
-                                            </TouchableOpacity>
-                                        </View>
-
-                                        {isExp && (
-                                            <View style={st.merchantTxnList}>
-                                                {mTxns.slice(0, 15).map((t, idx) => (
-                                                    <View key={String(t.id ?? idx)} style={st.miniTxnRow}>
-                                                        <Text style={st.miniTxnDate}>
-                                                            {new Date(t.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                                                        </Text>
-                                                        <Text style={st.miniTxnCat}>{CATEGORIES[t.category]?.icon}</Text>
-                                                        <Text style={[st.miniTxnAmt, { color: t.type === 'debit' ? colors.expense : colors.income }]}>
-                                                            {t.type === 'debit' ? '−' : '+'}{formatCurrency(t.amount)}
-                                                        </Text>
-                                                    </View>
-                                                ))}
-                                                {mTxns.length > 15 && (
-                                                    <Text style={st.moreTxns}>+{mTxns.length - 15} more</Text>
-                                                )}
-                                            </View>
                                         )}
-                                    </View>
+                                    </>
                                 );
-                            })}
+                            })()}
                         </View>
                     )}
                 </>
@@ -460,46 +509,18 @@ export default function InsightsScreen() {
             <View style={{ height: 80 }} />
 
             {/* ══ Custom Date Modal ══ */}
-            <Modal visible={customModal} transparent animationType="slide" onRequestClose={() => setCustomModal(false)}>
-                <TouchableOpacity style={st.overlay} activeOpacity={1} onPress={() => setCustomModal(false)} />
-                <View style={st.bottomSheet}>
-                    <View style={st.sheetHandle} />
-                    <Text style={st.sheetTitle}>Custom Date Range</Text>
-                    {showCalFor ? (
-                        <View>
-                            <Calendar
-                                current={showCalFor === 'start' ? customStart || undefined : customEnd || undefined}
-                                onDayPress={(day) => {
-                                    if (showCalFor === 'start') setCustomStart(day.dateString);
-                                    else setCustomEnd(day.dateString);
-                                    setShowCalFor(null);
-                                }}
-                                theme={{ calendarBackground: colors.surface.containerHigh, todayTextColor: colors.primary.main, dayTextColor: colors.text.headline, arrowColor: colors.primary.main, monthTextColor: colors.text.headline, textSectionTitleColor: colors.text.secondary }}
-                            />
-                            <TouchableOpacity style={{ alignSelf: 'center', marginTop: spacing.lg }} onPress={() => setShowCalFor(null)}>
-                                <Text style={{ ...type.labelL, color: colors.primary.main }}>Done</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <View>
-                            <Text style={st.inputLabel}>Start Date</Text>
-                            <View style={st.dateInputRow}>
-                                <TextInput style={[st.formInput, { flex: 1, marginBottom: 0 }]} placeholder="YYYY-MM-DD" placeholderTextColor={colors.text.muted} value={customStart} onChangeText={setCustomStart} />
-                                <TouchableOpacity style={st.calBtn} onPress={() => setShowCalFor('start')}><Text style={{ fontSize: 22 }}>📅</Text></TouchableOpacity>
-                            </View>
-                            <Text style={[st.inputLabel, { marginTop: spacing.lg }]}>End Date</Text>
-                            <View style={st.dateInputRow}>
-                                <TextInput style={[st.formInput, { flex: 1, marginBottom: 0 }]} placeholder="YYYY-MM-DD" placeholderTextColor={colors.text.muted} value={customEnd} onChangeText={setCustomEnd} />
-                                <TouchableOpacity style={st.calBtn} onPress={() => setShowCalFor('end')}><Text style={{ fontSize: 22 }}>📅</Text></TouchableOpacity>
-                            </View>
-                            <View style={st.sheetFooter}>
-                                <TouchableOpacity style={st.cancelBtn} onPress={() => setCustomModal(false)}><Text style={st.cancelText}>Cancel</Text></TouchableOpacity>
-                                <TouchableOpacity style={st.applyBtn} onPress={() => { setCustomModal(false); setDateFilter('custom'); }}><Text style={st.applyText}>Apply</Text></TouchableOpacity>
-                            </View>
-                        </View>
-                    )}
-                </View>
-            </Modal>
+            <DateRangePickerModal
+                visible={customModal}
+                initialStart={customStart}
+                initialEnd={customEnd}
+                onClose={() => setCustomModal(false)}
+                onApply={(s, e) => {
+                    setCustomStart(s);
+                    setCustomEnd(e);
+                    setCustomModal(false);
+                    setDateFilter('custom');
+                }}
+            />
 
             {/* ══ Merchant Edit Modal ══ */}
             <Modal visible={showMerchantEdit} transparent animationType="slide" onRequestClose={() => setShowMerchantEdit(false)}>
@@ -531,7 +552,7 @@ export default function InsightsScreen() {
                                 value={merchantEditForm.isExcluded}
                                 onValueChange={(val) => setMerchantEditForm(f => ({ ...f, isExcluded: val }))}
                                 trackColor={{ false: colors.surface.containerHighest, true: colors.primary.main }}
-                                thumbColor={merchantEditForm.isExcluded ? '#fff' : colors.text.muted}
+                                thumbColor={merchantEditForm.isExcluded ? '#FFFFFF' : colors.text.muted}
                             />
                         </View>
                     </ScrollView>
@@ -547,7 +568,7 @@ export default function InsightsScreen() {
     );
 }
 
-const st = StyleSheet.create({
+function makeStyles(colors) { return StyleSheet.create({
     screen:  { flex: 1, backgroundColor: colors.surface.base },
     content: { paddingHorizontal: spacing.xl },
     loadingWrap: { paddingVertical: 100, alignItems: 'center' },
@@ -566,29 +587,33 @@ const st = StyleSheet.create({
     datePillText:   { ...type.labelM, color: colors.text.secondary },
     datePillTextActive: { color: colors.primary.onContainer, fontWeight: '700' },
 
-    // ── Hero cards ──
-    heroRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
+    // ── Hero card ──
     heroCard: {
-        flex: 1, backgroundColor: colors.surface.container,
+        backgroundColor: colors.surface.container,
         borderRadius: radius.xl, padding: spacing.xl,
         borderWidth: 1, borderColor: colors.outline.default,
-        borderLeftWidth: 3,
+        borderLeftWidth: 3, marginBottom: spacing.lg,
     },
-    heroLabel:  { ...type.labelM, color: colors.text.muted, textTransform: 'uppercase', letterSpacing: 0.6 },
-    heroAmount: { ...type.headlineL, color: colors.text.headline, fontWeight: '800', marginTop: spacing.xs, marginBottom: spacing.sm },
-    heroMeta:   { ...type.labelS, color: colors.text.muted },
-    momPill:    { alignSelf: 'flex-start', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.full },
-    momText:    { ...type.labelS, fontWeight: '700' },
+    heroCardFull: { /* full width — no flex needed */ },
+    heroLabel:     { ...type.labelM, color: colors.text.muted, textTransform: 'uppercase', letterSpacing: 0.6 },
+    heroAmount:    { ...type.headlineL, color: colors.text.headline, fontWeight: '800', marginTop: spacing.xs, marginBottom: spacing.sm },
+    heroFooterRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.md },
+    heroMeta:      { ...type.labelS, color: colors.text.muted },
+    momPill:       { alignSelf: 'flex-start', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.full },
+    momText:       { ...type.labelS, fontWeight: '700' },
 
-    // ── Insights grid ──
-    insightGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.lg },
-    insightCard:    { width: '47%', backgroundColor: colors.surface.container, borderRadius: radius.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.outline.default },
-    insightCardWide:{ width: '100%', flexDirection: 'row' },
-    insightIcon:    { fontSize: 22, marginBottom: spacing.sm },
-    insightValue:   { ...type.headlineM, color: colors.text.headline, fontWeight: '700' },
-    insightLabel:   { ...type.labelS, color: colors.text.muted, marginTop: 2 },
-    anomalyInner:   { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-    anomalyIconWrap:{ backgroundColor: colors.expense + '22', padding: spacing.md, borderRadius: radius.full },
+    // ── Insights grid (2×2) ──
+    insightGrid:  { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.lg },
+    insightCard:  {
+        width: '47.5%',
+        backgroundColor: colors.surface.container,
+        borderRadius: radius.xl, padding: spacing.lg,
+        borderWidth: 1, borderColor: colors.outline.default,
+        minHeight: 90, justifyContent: 'flex-end',
+    },
+    insightIcon:  { fontSize: 20, marginBottom: spacing.sm },
+    insightValue: { ...type.headlineM, color: colors.text.headline, fontWeight: '700' },
+    insightLabel: { ...type.labelS, color: colors.text.muted, marginTop: 2 },
 
     // ── Sections ──
     section:       { backgroundColor: colors.surface.container, borderRadius: radius.xl, padding: spacing.xl, marginBottom: spacing.lg, borderWidth: 1, borderColor: colors.outline.default },
@@ -626,6 +651,8 @@ const st = StyleSheet.create({
     miniTxnCat:      { fontSize: 14, width: 22 },
     miniTxnAmt:      { ...type.labelL, fontWeight: '700', marginLeft: 'auto' },
     moreTxns:        { ...type.labelS, color: colors.text.muted, textAlign: 'center', paddingTop: spacing.sm },
+    showAllBtn:      { alignItems: 'center', paddingVertical: spacing.lg, marginTop: spacing.sm },
+    showAllText:     { ...type.labelM, color: colors.primary.main, fontWeight: '700' },
 
     // ── Bottom sheet ──
     overlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
@@ -644,7 +671,7 @@ const st = StyleSheet.create({
     chip:         { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.full, backgroundColor: colors.surface.container, borderWidth: 1, borderColor: colors.outline.default },
     chipActive:   { backgroundColor: colors.primary.main, borderColor: colors.primary.main },
     chipText:     { ...type.labelM, color: colors.text.secondary },
-    chipTextActive: { color: colors.surface.base, fontWeight: '700' },
+    chipTextActive: { color: '#FFFFFF', fontWeight: '700' },
 
     // ── Exclude row ──
     excludeRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.lg, borderTopWidth: 1, borderTopColor: colors.outline.default, marginBottom: spacing.lg },
@@ -655,5 +682,5 @@ const st = StyleSheet.create({
     cancelBtn:  { flex: 1, alignItems: 'center', paddingVertical: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface.container },
     cancelText: { ...type.labelL, color: colors.text.muted },
     applyBtn:   { flex: 2, alignItems: 'center', paddingVertical: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.primary.main },
-    applyText:  { ...type.labelL, color: colors.surface.base, fontWeight: '800' },
-});
+    applyText:  { ...type.labelL, color: '#FFFFFF', fontWeight: '800' },
+}); }

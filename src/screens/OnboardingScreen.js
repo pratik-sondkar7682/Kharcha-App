@@ -6,29 +6,42 @@
 import React, { useState, useRef } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, Dimensions,
-    ScrollView, Platform, PermissionsAndroid, StatusBar,
+    ScrollView, Platform, PermissionsAndroid, StatusBar, TextInput,
 } from 'react-native';
-import { saveSetting } from '../lib/database';
+import { saveSetting, reCategorizeByName } from '../lib/database';
 import { colors as darkColors, type, radius, spacing } from '../theme';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 const SLIDES = [
     {
-        emoji: '💰',
-        title: 'Know where your\nmoney goes',
-        body: 'Kharcha reads your bank SMS to automatically track every UPI, debit, and ATM transaction — no manual entry needed.',
+        emoji: '⚡',
+        title: 'Your expenses,\nautomatically tracked',
+        body: 'Kharcha reads your bank SMS and logs every UPI, debit, and ATM transaction the moment it happens — no manual entry, no linking bank accounts.',
+        highlight: 'Works with ICICI, HDFC, Axis, SBI, Kotak & more.',
+    },
+    {
+        emoji: '📊',
+        title: 'Instant clarity on\nyour spending',
+        body: 'See exactly where your money goes — broken down by category, merchant, and month. Spot patterns you never noticed before.',
+        highlight: 'Food, groceries, transport, bills — sorted automatically.',
     },
     {
         emoji: '🔒',
-        title: 'Your data never\nleaves your phone',
-        body: 'All transactions are stored locally on your device. Only merchant names are sent to AI for smarter categorization — never amounts, accounts, or personal details.',
-        highlight: 'Zero financial data shared. Ever.',
+        title: 'Built for privacy,\nnot data collection',
+        body: 'Your transactions never leave your phone. Kharcha stores everything locally — amounts, accounts, and dates stay on your device, always.',
+        highlight: 'Only merchant names touch the internet — to label them correctly.',
+    },
+    {
+        emoji: '👤',
+        title: "What's your name?",
+        body: 'Kharcha uses your name to detect transfers to yourself — like moving money between your own accounts — and keeps them separate from your spending.',
+        nameInput: true,
     },
     {
         emoji: '📩',
-        title: 'One permission,\nfull picture',
-        body: 'Kharcha needs access to your SMS inbox to read bank messages. We never read personal or OTP messages — only bank transaction alerts.',
+        title: 'Allow SMS access\nto get started',
+        body: "Kharcha only reads messages from your bank — never OTPs, never personal chats. You'll see Android's permission dialog next. Tap Allow to begin.",
         cta: 'Grant SMS Access',
         ctaSecondary: 'Skip for now',
     },
@@ -36,6 +49,7 @@ const SLIDES = [
 
 export default function OnboardingScreen({ onDone }) {
     const [slide, setSlide] = useState(0);
+    const [fullName, setFullName] = useState('');
     const scrollRef = useRef(null);
 
     const goTo = (index) => {
@@ -49,7 +63,15 @@ export default function OnboardingScreen({ onDone }) {
         }
     };
 
+    const saveName = async () => {
+        if (fullName.trim()) {
+            await saveSetting('user_full_name', fullName.trim());
+            await reCategorizeByName(fullName.trim(), null);
+        }
+    };
+
     const finish = async () => {
+        await saveName();
         await saveSetting('onboarding_done', '1');
         onDone();
     };
@@ -100,6 +122,19 @@ export default function OnboardingScreen({ onDone }) {
 
                         <Text style={st.title}>{s.title}</Text>
                         <Text style={st.body}>{s.body}</Text>
+
+                        {s.nameInput && (
+                            <TextInput
+                                style={st.nameInput}
+                                placeholder="e.g. PRATIK SONDKAR"
+                                placeholderTextColor={c.text.muted}
+                                value={fullName}
+                                onChangeText={setFullName}
+                                autoCapitalize="characters"
+                                returnKeyType="done"
+                                onSubmitEditing={handleNext}
+                            />
+                        )}
 
                         {s.highlight && (
                             <View style={st.highlightBox}>
@@ -195,6 +230,18 @@ const st = StyleSheet.create({
         color: c.text.body,
         textAlign: 'center',
         lineHeight: 24,
+        marginBottom: spacing.xl,
+    },
+    nameInput: {
+        width: '100%',
+        backgroundColor: c.surface.container,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: c.outline.variant,
+        paddingHorizontal: spacing.xl,
+        paddingVertical: spacing.lg,
+        color: c.text.headline,
+        ...type.bodyL,
         marginBottom: spacing.xl,
     },
     highlightBox: {

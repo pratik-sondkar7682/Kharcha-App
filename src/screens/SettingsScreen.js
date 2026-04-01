@@ -3,11 +3,13 @@
  * Profile → Data → Danger Zone → About
  */
 import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Share, Platform, Switch, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Alert, Platform, Switch, ActivityIndicator, Linking } from 'react-native';
+import { File, Paths } from 'expo-file-system/next';
+import * as Sharing from 'expo-sharing';
 import { useFocusEffect } from '@react-navigation/native';
 import { type, radius, spacing } from '../theme';
 import { useTheme } from '../context/ThemeContext';
-import { getTransactionCount, exportData, getSetting, saveSetting, clearAllTransactions, resetTransactionSettings } from '../lib/database';
+import { getTransactionCount, exportData, getSetting, saveSetting, clearAllTransactions, resetTransactionSettings, reCategorizeByName, clearMerchantCache } from '../lib/database';
 import { syncSMS } from '../lib/smsReader';
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -61,16 +63,39 @@ export default function SettingsScreen() {
 
     const handleSaveName = async () => {
         try {
+            const oldName = await getSetting('user_full_name');
             await saveSetting('user_full_name', fullName);
-            Alert.alert('Profile Updated', 'Full name saved for self-transfer detection.');
+            const { updated } = await reCategorizeByName(fullName, oldName);
+            const msg = updated > 0
+                ? `Name saved. ${updated} transaction${updated !== 1 ? 's' : ''} moved to Unaccounted.`
+                : 'Name saved for self-transfer detection.';
+            Alert.alert('Profile Updated', msg);
         } catch { Alert.alert('Error', 'Failed to save name. Please try again.'); }
     };
 
     const handleExport = async () => {
         try {
             const data = await exportData();
-            await Share.share({ message: JSON.stringify(data, null, 2), title: 'Kharcha Backup' });
-        } catch { Alert.alert('Error', 'Export failed'); }
+            const txns = data.transactions || [];
+
+            // Build CSV
+            const headers = ['date', 'merchant', 'amount', 'type', 'category', 'bank', 'account', 'upiRef', 'note'];
+            const escape = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+            const rows = txns.map(t => headers.map(h => escape(t[h])).join(','));
+            const csv = [headers.join(','), ...rows].join('\n');
+
+            const file = new File(Paths.cache, 'kharcha_export.csv');
+            file.write(csv);
+
+            if (await Sharing.isAvailableAsync()) {
+                await Sharing.shareAsync(file.uri, { mimeType: 'text/csv', dialogTitle: 'Export Kharcha Transactions' });
+            } else {
+                Alert.alert('Export saved', `File saved to: ${file.uri}`);
+            }
+        } catch (e) {
+            console.error('Export error:', e);
+            Alert.alert('Error', 'Export failed. Please try again.');
+        }
     };
 
     const handleRescan = () => {
@@ -110,6 +135,18 @@ export default function SettingsScreen() {
                     }},
                 ])
             },
+        ]);
+    };
+
+    const handleClearCache = () => {
+        Alert.alert('Clear Merchant Cache', 'Forces all merchants to be re-enriched by AI on the next scan. Does not delete any transactions.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Clear Cache', style: 'destructive', onPress: async () => {
+                try {
+                    await clearMerchantCache();
+                    Alert.alert('Cache Cleared', 'All cached merchant data removed. Re-scan SMS to re-enrich.');
+                } catch { Alert.alert('Error', 'Failed to clear cache. Please try again.'); }
+            }},
         ]);
     };
 
@@ -212,6 +249,10 @@ export default function SettingsScreen() {
                 <MenuItem
                     icon="🔄" title="Re-scan SMS" subtitle="Read new SMS, add transactions"
                     onPress={handleRescan} first st={st}
+                />
+                <MenuItem
+                    icon="🗂" title="Clear Merchant Cache" subtitle="Force all merchants to be re-enriched on next scan"
+                    onPress={handleClearCache} danger st={st}
                 />
                 <MenuItem
                     icon="↩️" title="Reset Transaction Settings" subtitle="Clear all category edits and overrides"

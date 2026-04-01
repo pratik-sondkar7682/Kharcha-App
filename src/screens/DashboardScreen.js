@@ -7,8 +7,9 @@ import {
     View, Text, StyleSheet, RefreshControl, TouchableOpacity,
     ActivityIndicator, Modal, TextInput, FlatList, ScrollView, Switch, Platform
 } from 'react-native';
-import { Calendar } from 'react-native-calendars';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import DateRangePickerModal from '../components/DateRangePickerModal';
 import { type, radius, spacing, CATEGORIES } from '../theme';
 import { useTheme } from '../context/ThemeContext';
 import { useFilter } from '../context/FilterContext';
@@ -17,8 +18,8 @@ import {
     formatCurrency, getDateRange, DATE_RANGES,
     averageDailySpend, biggestTransactions, weekdayVsWeekend, getPreviousPeriodRange
 } from '../lib/analytics';
-import { getTransactions, updateTransaction } from '../lib/database';
-import { syncSMS, hasSMSPermission, requestSMSPermission } from '../lib/smsReader';
+import { getTransactions, updateTransaction, getSetting } from '../lib/database';
+import { syncSMS, hasSMSPermission, requestSMSPermission, enrichInBackground } from '../lib/smsReader';
 import TransactionCard from '../components/TransactionCard';
 
 const SAFE_TOP = Platform.OS === 'android' ? 48 : 56;
@@ -31,7 +32,7 @@ function makeStyles(colors) {
         loadingText: { ...type.bodyM, color: colors.text.muted, marginTop: spacing.md },
 
         syncBanner: {
-            position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50,
+            position: 'absolute', top: SAFE_TOP, left: 0, right: 0, zIndex: 50,
             backgroundColor: colors.surface.containerHigh,
             paddingTop: 10, paddingBottom: 14, paddingHorizontal: spacing.xl,
             borderBottomWidth: 1, borderBottomColor: colors.outline.variant,
@@ -41,6 +42,14 @@ function makeStyles(colors) {
         syncPct: { ...type.labelM, color: colors.primary.main, fontWeight: '700' },
         progressTrack: { height: 4, backgroundColor: colors.outline.variant, borderRadius: 2, overflow: 'hidden' },
         progressFill: { height: '100%', backgroundColor: colors.primary.main, borderRadius: 2 },
+        enrichBanner: {
+            position: 'absolute', bottom: 90, left: spacing.xl, right: spacing.xl, zIndex: 50,
+            backgroundColor: colors.surface.containerHigh,
+            flexDirection: 'row', alignItems: 'center',
+            paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.lg,
+            borderRadius: radius.lg,
+            borderWidth: 1, borderColor: colors.outline.variant,
+        },
 
         header: {
             flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -101,25 +110,80 @@ function makeStyles(colors) {
         statLabel: { ...type.labelS, color: colors.text.muted, marginBottom: 2, fontSize: 10 },
         statValue: { fontSize: 14, fontWeight: '700', color: colors.text.headline },
 
-        feedTabsRow: {
+        // ── Feed section ──
+        feedSection: {
+            marginTop: spacing.md,
+            marginBottom: spacing.sm,
+        },
+
+        // Main tab bar — underline style
+        feedTabBar: {
             flexDirection: 'row',
             paddingHorizontal: spacing.xl,
-            marginBottom: spacing.md,
-            gap: spacing.sm,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.outline.default,
         },
         feedTab: {
-            flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-            paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.lg,
-            borderRadius: radius.full,
-            backgroundColor: colors.surface.containerHigh,
-            borderWidth: 1, borderColor: 'transparent',
+            flex: 1,
+            alignItems: 'center',
+            paddingBottom: spacing.sm,
         },
-        feedTabActive: {
-            backgroundColor: colors.surface.containerHighest,
-            borderColor: colors.outline.variant,
+        feedTabInner: {
+            flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+            paddingTop: spacing.sm,
         },
         feedTabText: { ...type.labelL, color: colors.text.muted },
         feedTabTextActive: { color: colors.text.headline, fontWeight: '700' },
+        feedTabUnderline: {
+            height: 2,
+            backgroundColor: colors.primary.main,
+            borderRadius: 2,
+            marginTop: spacing.sm,
+            alignSelf: 'stretch',
+        },
+
+        // Search + filter toolbar
+        toolbar: {
+            flexDirection: 'row',
+            paddingHorizontal: spacing.xl,
+            paddingVertical: spacing.md,
+            gap: spacing.sm, alignItems: 'center',
+        },
+
+        // Sub-tabs row
+        subTabRow: {
+            flexDirection: 'row', alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: spacing.xl,
+            paddingTop: spacing.sm,
+            paddingBottom: spacing.md,
+            gap: spacing.sm,
+        },
+        subTabGroup: {
+            flex: 1,
+            flexDirection: 'row',
+            backgroundColor: colors.surface.containerHigh,
+            borderRadius: radius.full,
+            padding: 3,
+        },
+        subTab: {
+            flex: 1,
+            alignItems: 'center',
+            paddingVertical: spacing.xs + 1,
+            borderRadius: radius.full,
+        },
+        subTabActive: {
+            backgroundColor: colors.surface.container,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.08,
+            shadowRadius: 2,
+            elevation: 2,
+        },
+        subTabText: { ...type.labelM, color: colors.text.muted },
+        subTabTextActive: { color: colors.text.headline, fontWeight: '700' },
+        feedCount: { ...type.labelS, color: colors.text.muted },
+
         badge: {
             backgroundColor: colors.primary.main,
             borderRadius: radius.full, minWidth: 18, height: 18,
@@ -127,11 +191,6 @@ function makeStyles(colors) {
             paddingHorizontal: 5,
         },
         badgeText: { ...type.labelS, color: '#FFFFFF', fontWeight: '800', fontSize: 9 },
-
-        toolbar: {
-            flexDirection: 'row', paddingHorizontal: spacing.xl,
-            marginBottom: spacing.sm, gap: spacing.md, alignItems: 'center',
-        },
         searchBox: {
             flex: 1, flexDirection: 'row', alignItems: 'center',
             backgroundColor: colors.surface.container,
@@ -257,6 +316,10 @@ function makeStyles(colors) {
     });
 }
 
+// 30 s buffer so SMS delivered slightly out of order aren't missed on incremental syncs.
+// Deduplication handles any resulting overlaps.
+const CLOCK_SKEW_BUFFER_MS = 30_000;
+
 export default function DashboardScreen() {
     const { colors } = useTheme();
     const st = makeStyles(colors);
@@ -269,9 +332,9 @@ export default function DashboardScreen() {
 
     const [transactions, setTransactions] = useState([]);
     const [feedTab, setFeedTab]           = useState('transactions');
+    const [txnSubTab, setTxnSubTab]       = useState('all');
 
     const [customModal, setCustomModal]   = useState(false);
-    const [showCalFor, setShowCalFor]     = useState(null);
 
     const [summary, setSummary]       = useState({ totalSpent: 0, totalReceived: 0, netFlow: 0, count: 0 });
     const [prevSummary, setPrevSummary] = useState(null);
@@ -291,6 +354,8 @@ export default function DashboardScreen() {
 
     const [syncProgress, setSyncProgress] = useState(0);
     const [syncStatus, setSyncStatus]     = useState('');
+    const [enriching, setEnriching]       = useState(false);
+    const [enrichStatus, setEnrichStatus] = useState('');
 
     const loadData = useCallback(async () => {
         try {
@@ -351,7 +416,7 @@ export default function DashboardScreen() {
         }
     };
 
-    const handleSync = useCallback(async () => {
+    const handleSync = useCallback(async (isManual = false) => {
         const hasPermission = await hasSMSPermission();
         if (!hasPermission) {
             setSmsPermissionDenied(true);
@@ -359,29 +424,73 @@ export default function DashboardScreen() {
             return;
         }
         setSmsPermissionDenied(false);
-        setRefreshing(true);
-        setSyncProgress(1);
-        setSyncStatus('Starting sync…');
+
+        // Decide: full scan or incremental?
+        const rawTs = await getSetting('last_synced_at');
+        const lastSyncedAt = rawTs ? parseInt(rawTs, 10) : null;
+        const isFirstOpen = !lastSyncedAt;
+
+        const syncOptions = (isManual || isFirstOpen)
+            ? {}
+            : { minDate: Math.max(0, lastSyncedAt - CLOCK_SKEW_BUFFER_MS) };
+
+        // Full-screen loader only on first open with no transactions yet.
+        // Pull-to-refresh gets the top banner. Silent otherwise.
+        const showFullLoader = isFirstOpen && transactions.length === 0;
+
+        if (showFullLoader) {
+            setLoading(true);
+            setSyncProgress(1);
+            setSyncStatus('Starting sync…');
+        } else if (isManual) {
+            setRefreshing(true);
+            setSyncProgress(1);
+            setSyncStatus('Checking for new transactions…');
+        }
+
+        let pendingMerchants = [];
         try {
-            await syncSMS({}, (progress, status) => {
-                setSyncProgress(progress);
-                setSyncStatus(status);
+            const result = await syncSMS(syncOptions, (progress, status) => {
+                if (showFullLoader || isManual) {
+                    setSyncProgress(progress);
+                    setSyncStatus(status);
+                }
             });
-            await loadData();
+            pendingMerchants = result?.pendingMerchants || [];
+
+            // Silent incremental: show a brief toast if new transactions were found.
+            if (!showFullLoader && !isManual && result.newCount > 0) {
+                setSyncStatus(`${result.newCount} new transaction${result.newCount > 1 ? 's' : ''} added`);
+                setSyncProgress(100);
+                setTimeout(() => { setSyncProgress(0); setSyncStatus(''); }, 3000);
+            }
         } catch (e) {
             console.error('Sync error:', e);
-            setSyncStatus('Sync failed');
+            if (showFullLoader || isManual) setSyncStatus('Sync failed');
         } finally {
             setRefreshing(false);
-            setTimeout(() => { setSyncProgress(0); setSyncStatus(''); }, 2000);
+            setLoading(false);
+            if (showFullLoader || isManual) {
+                setTimeout(() => { setSyncProgress(0); setSyncStatus(''); }, 2000);
+            }
         }
-    }, [loadData]);
+        await loadData();
+        if (pendingMerchants.length > 0) {
+            setEnriching(true);
+            setEnrichStatus(`Categorizing 0 / ${pendingMerchants.length} merchants…`);
+            enrichInBackground(
+                pendingMerchants,
+                () => { setEnriching(false); setEnrichStatus(''); loadData(); },
+                (_pct, status) => { setEnrichStatus(status); }
+            );
+        }
+    }, [loadData, transactions.length]);
 
     const handleGrantSMSAccess = useCallback(async () => {
         const granted = await requestSMSPermission();
         if (granted) {
             setSmsPermissionDenied(false);
-            handleSync();
+            handleSync(true);
         }
     }, [handleSync]);
 
@@ -391,7 +500,15 @@ export default function DashboardScreen() {
     const filteredTxns = React.useMemo(() => {
         let result = transactions.filter(t => {
             const isUnaccounted = t.category === 'internal_transfer' || t.category === 'credit_card' || !!t.isExcluded;
-            return feedTab === 'unaccounted' ? isUnaccounted : !isUnaccounted;
+            if (feedTab === 'unaccounted') {
+                if (!isUnaccounted) return false;
+                if (txnSubTab === 'debit')  return t.type === 'debit';
+                if (txnSubTab === 'credit') return t.type === 'credit';
+                return true;
+            }
+            if (txnSubTab === 'debit')  return !isUnaccounted && t.type === 'debit';
+            if (txnSubTab === 'credit') return !isUnaccounted && t.type === 'credit';
+            return !isUnaccounted;
         });
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
@@ -411,7 +528,7 @@ export default function DashboardScreen() {
             return 0;
         });
         return result;
-    }, [transactions, feedTab, searchQuery, filterCategory, sortField, sortOrder]);
+    }, [transactions, feedTab, txnSubTab, searchQuery, filterCategory, sortField, sortOrder]);
 
     const hasActiveFilters = filterCategory !== 'all' || sortField !== 'date' || sortOrder !== 'DESC';
     const unaccountedCount = transactions.filter(t => t.category === 'internal_transfer' || t.category === 'credit_card' || !!t.isExcluded).length;
@@ -421,12 +538,67 @@ export default function DashboardScreen() {
         : null;
     const momUp = prevSummary && summary.totalSpent > prevSummary.totalSpent;
 
-    if (loading && transactions.length === 0) {
+    if ((loading || refreshing) && transactions.length === 0) {
+        const steps = [
+            { pct: 10,  label: 'Reading SMS inbox…' },
+            { pct: 20,  label: 'Filtering bank messages…' },
+            { pct: 30,  label: 'Parsing transactions…' },
+            { pct: 60,  label: 'Categorizing…' },
+            { pct: 85,  label: 'AI enriching merchants…' },
+            { pct: 95,  label: 'Saving to database…' },
+            { pct: 100, label: 'Done!' },
+        ];
+        const activeStep = syncProgress > 0
+            ? steps.filter(s => syncProgress >= s.pct).pop() || steps[0]
+            : null;
+
         return (
-            <View style={[st.screen, st.center]}>
-                <Text style={{ fontSize: 44, marginBottom: spacing.lg }}>💰</Text>
-                <ActivityIndicator size="large" color={colors.primary.main} />
-                <Text style={st.loadingText}>Loading your transactions…</Text>
+            <View style={[st.screen, st.center, { paddingHorizontal: spacing.xxl }]}>
+                <Text style={{ fontSize: 52, marginBottom: spacing.xxl }}>💰</Text>
+                <Text style={[type.headlineM, { color: colors.text.headline, marginBottom: spacing.sm, textAlign: 'center' }]}>
+                    {syncProgress > 0 ? (activeStep?.label ?? 'Processing…') : 'Loading your transactions…'}
+                </Text>
+                <Text style={[type.bodyM, { color: colors.text.muted, marginBottom: spacing.xxl, textAlign: 'center' }]}>
+                    {syncProgress > 0 ? syncStatus : 'Setting things up for you'}
+                </Text>
+
+                {/* Progress bar */}
+                <View style={{ width: '100%', height: 6, backgroundColor: colors.outline.variant, borderRadius: 3, overflow: 'hidden', marginBottom: spacing.xl }}>
+                    <View style={{
+                        height: '100%',
+                        width: `${syncProgress || 0}%`,
+                        backgroundColor: colors.primary.main,
+                        borderRadius: 3,
+                    }} />
+                </View>
+
+                {/* Step indicators */}
+                <View style={{ width: '100%', gap: spacing.sm }}>
+                    {steps.map((step, i) => {
+                        const done = syncProgress >= step.pct;
+                        const active = activeStep?.pct === step.pct;
+                        return (
+                            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, opacity: done ? 1 : 0.3 }}>
+                                <View style={{
+                                    width: 22, height: 22, borderRadius: 11,
+                                    backgroundColor: done ? colors.primary.main : colors.outline.variant,
+                                    alignItems: 'center', justifyContent: 'center',
+                                }}>
+                                    <Text style={{ fontSize: 11, color: '#fff', fontWeight: '700' }}>
+                                        {done ? '✓' : String(i + 1)}
+                                    </Text>
+                                </View>
+                                <Text style={[type.bodyM, {
+                                    color: active ? colors.primary.main : done ? colors.text.body : colors.text.muted,
+                                    fontWeight: active ? '700' : '400',
+                                }]}>
+                                    {step.label}
+                                </Text>
+                                {active && <ActivityIndicator size="small" color={colors.primary.main} style={{ marginLeft: 'auto' }} />}
+                            </View>
+                        );
+                    })}
+                </View>
             </View>
         );
     }
@@ -463,6 +635,15 @@ export default function DashboardScreen() {
                 </View>
             )}
 
+            {enriching && syncProgress === 0 && (
+                <View style={st.enrichBanner}>
+                    <ActivityIndicator size="small" color={colors.primary.main} />
+                    <Text style={[st.syncStatusText, { marginLeft: spacing.sm }]}>
+                        {enrichStatus || 'Categorizing merchants…'}
+                    </Text>
+                </View>
+            )}
+
             <FlatList
                 data={filteredTxns}
                 keyExtractor={(item) => String(item.id)}
@@ -471,7 +652,7 @@ export default function DashboardScreen() {
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
-                        onRefresh={handleSync}
+                        onRefresh={() => handleSync(true)}
                         tintColor={colors.primary.main}
                         colors={[colors.primary.main]}
                     />
@@ -486,9 +667,6 @@ export default function DashboardScreen() {
                                     {DATE_RANGES.find(r => r.id === dateFilter)?.label ?? 'All Time'}
                                 </Text>
                             </View>
-                            <TouchableOpacity style={st.syncBtn} onPress={handleSync} activeOpacity={0.75}>
-                                <Text style={st.syncBtnText}>↻  Sync</Text>
-                            </TouchableOpacity>
                         </View>
 
                         <ScrollView
@@ -565,64 +743,96 @@ export default function DashboardScreen() {
                             </View>
                         </View>
 
-                        <View style={st.feedTabsRow}>
-                            {[
-                                { id: 'transactions', label: 'Transactions' },
-                                { id: 'unaccounted',  label: 'Unaccounted' },
-                            ].map(tab => {
-                                const active = feedTab === tab.id;
-                                return (
-                                    <TouchableOpacity
-                                        key={tab.id}
-                                        style={[st.feedTab, active && st.feedTabActive]}
-                                        onPress={() => setFeedTab(tab.id)}
-                                        activeOpacity={0.8}
-                                    >
-                                        <Text style={[st.feedTabText, active && st.feedTabTextActive]}>
-                                            {tab.label}
-                                        </Text>
-                                        {tab.id === 'unaccounted' && unaccountedCount > 0 && (
-                                            <View style={st.badge}>
-                                                <Text style={st.badgeText}>{unaccountedCount}</Text>
+                        {/* ── Feed Section ── */}
+                        <View style={st.feedSection}>
+
+                            {/* Row 1: Main tabs with underline indicator */}
+                            <View style={st.feedTabBar}>
+                                {[
+                                    { id: 'transactions', label: 'Transactions' },
+                                    { id: 'unaccounted',  label: 'CC & Self Transfer' },
+                                ].map(tab => {
+                                    const active = feedTab === tab.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={tab.id}
+                                            style={st.feedTab}
+                                            onPress={() => setFeedTab(tab.id)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <View style={st.feedTabInner}>
+                                                <Text style={[st.feedTabText, active && st.feedTabTextActive]}>
+                                                    {tab.label}
+                                                </Text>
                                             </View>
-                                        )}
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-
-                        <View style={st.toolbar}>
-                            <View style={st.searchBox}>
-                                <Text style={st.searchIcon}>🔍</Text>
-                                <TextInput
-                                    style={st.searchInput}
-                                    placeholder="Search merchants…"
-                                    placeholderTextColor={colors.text.muted}
-                                    value={searchQuery}
-                                    onChangeText={setSearchQuery}
-                                    returnKeyType="search"
-                                />
-                                {searchQuery.length > 0 && (
-                                    <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                                        <Text style={st.clearIcon}>✕</Text>
-                                    </TouchableOpacity>
-                                )}
+                                            {active && <View style={st.feedTabUnderline} />}
+                                        </TouchableOpacity>
+                                    );
+                                })}
                             </View>
-                            <TouchableOpacity
-                                style={[st.filterIconBtn, hasActiveFilters && st.filterIconBtnActive]}
-                                onPress={() => setShowFilterModal(true)}
-                                activeOpacity={0.75}
-                            >
-                                <Text style={{ fontSize: 18 }}>⚙️</Text>
-                                {hasActiveFilters && <View style={st.filterDot} />}
-                            </TouchableOpacity>
-                        </View>
 
-                        <Text style={st.feedMeta}>
-                            {feedTab === 'unaccounted'
-                                ? `${filteredTxns.length} unaccounted items`
-                                : `${filteredTxns.length} transactions`}
-                        </Text>
+                            {/* Row 2: Search + filter */}
+                            <View style={st.toolbar}>
+                                <View style={st.searchBox}>
+                                    <Text style={st.searchIcon}>🔍</Text>
+                                    <TextInput
+                                        style={st.searchInput}
+                                        placeholder="Search merchants…"
+                                        placeholderTextColor={colors.text.muted}
+                                        value={searchQuery}
+                                        onChangeText={setSearchQuery}
+                                        returnKeyType="search"
+                                    />
+                                    {searchQuery.length > 0 && (
+                                        <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                            <Text style={st.clearIcon}>✕</Text>
+                                        </TouchableOpacity>
+                                    )}
+                                </View>
+                                <TouchableOpacity
+                                    style={[st.filterIconBtn, hasActiveFilters && st.filterIconBtnActive]}
+                                    onPress={() => setShowFilterModal(true)}
+                                    activeOpacity={0.75}
+                                >
+                                    <Ionicons
+                                        name="options-outline"
+                                        size={20}
+                                        color={hasActiveFilters ? colors.primary.main : colors.text.secondary}
+                                    />
+                                    {hasActiveFilters && <View style={st.filterDot} />}
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* Row 3: Sub-tabs + count (both tabs) */}
+                            <View style={st.subTabRow}>
+                                <View style={st.subTabGroup}>
+                                    {[
+                                        { id: 'all',    label: 'All' },
+                                        { id: 'debit',  label: 'Debit' },
+                                        { id: 'credit', label: 'Credit' },
+                                    ].map(sub => {
+                                        const active = txnSubTab === sub.id;
+                                        return (
+                                            <TouchableOpacity
+                                                key={sub.id}
+                                                style={[st.subTab, active && st.subTabActive]}
+                                                onPress={() => setTxnSubTab(sub.id)}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Text style={[st.subTabText, active && st.subTabTextActive]}>
+                                                    {sub.label}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                                <Text style={st.feedCount}>
+                                    {filteredTxns.length} {feedTab === 'unaccounted' ? 'items' : 'transactions'}
+                                </Text>
+                            </View>
+
+
+                        </View>
                     </View>
                 }
 
@@ -716,79 +926,19 @@ export default function DashboardScreen() {
             </Modal>
 
             {/* ══ Custom Date Range Modal ══ */}
-            <Modal visible={customModal} transparent animationType="slide" onRequestClose={() => setCustomModal(false)}>
-                <TouchableOpacity style={st.overlay} activeOpacity={1} onPress={() => setCustomModal(false)} />
-                <View style={st.bottomSheet}>
-                    <View style={st.sheetHandle} />
-                    <Text style={st.sheetTitle}>Custom Date Range</Text>
-
-                    {showCalFor ? (
-                        <View>
-                            <Calendar
-                                current={showCalFor === 'start' ? customStart || undefined : customEnd || undefined}
-                                onDayPress={(day) => {
-                                    if (showCalFor === 'start') setCustomStart(day.dateString);
-                                    else setCustomEnd(day.dateString);
-                                    setShowCalFor(null);
-                                }}
-                                theme={{
-                                    calendarBackground: colors.surface.containerHigh,
-                                    todayTextColor: colors.primary.main,
-                                    dayTextColor: colors.text.headline,
-                                    arrowColor: colors.primary.main,
-                                    monthTextColor: colors.text.headline,
-                                    textSectionTitleColor: colors.text.secondary,
-                                }}
-                            />
-                            <TouchableOpacity style={{ alignSelf: 'center', marginTop: spacing.lg }} onPress={() => setShowCalFor(null)}>
-                                <Text style={{ ...type.labelL, color: colors.primary.main }}>Done</Text>
-                            </TouchableOpacity>
-                        </View>
-                    ) : (
-                        <View>
-                            <Text style={st.sheetSectionLabel}>Start Date</Text>
-                            <View style={st.dateInputRow}>
-                                <TextInput
-                                    style={[st.formInput, { flex: 1, marginBottom: 0 }]}
-                                    placeholder="YYYY-MM-DD"
-                                    placeholderTextColor={colors.text.muted}
-                                    value={customStart}
-                                    onChangeText={setCustomStart}
-                                />
-                                <TouchableOpacity style={st.calBtn} onPress={() => setShowCalFor('start')}>
-                                    <Text style={{ fontSize: 22 }}>📅</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            <Text style={[st.sheetSectionLabel, { marginTop: spacing.lg }]}>End Date</Text>
-                            <View style={st.dateInputRow}>
-                                <TextInput
-                                    style={[st.formInput, { flex: 1, marginBottom: 0 }]}
-                                    placeholder="YYYY-MM-DD"
-                                    placeholderTextColor={colors.text.muted}
-                                    value={customEnd}
-                                    onChangeText={setCustomEnd}
-                                />
-                                <TouchableOpacity style={st.calBtn} onPress={() => setShowCalFor('end')}>
-                                    <Text style={{ fontSize: 22 }}>📅</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            <View style={[st.sheetFooter, { marginTop: spacing.xl }]}>
-                                <TouchableOpacity style={st.cancelBtn} onPress={() => setCustomModal(false)}>
-                                    <Text style={st.cancelText}>Cancel</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={st.applyBtn}
-                                    onPress={() => { setCustomModal(false); setDateFilter('custom'); setLoading(true); }}
-                                >
-                                    <Text style={st.applyText}>Apply</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    )}
-                </View>
-            </Modal>
+            <DateRangePickerModal
+                visible={customModal}
+                initialStart={customStart}
+                initialEnd={customEnd}
+                onClose={() => setCustomModal(false)}
+                onApply={(s, e) => {
+                    setCustomStart(s);
+                    setCustomEnd(e);
+                    setCustomModal(false);
+                    setDateFilter('custom');
+                    setLoading(true);
+                }}
+            />
 
             {/* ══ Edit Transaction Modal ══ */}
             <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>

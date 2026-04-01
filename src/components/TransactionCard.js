@@ -7,7 +7,8 @@ import {
     View, Text, TouchableOpacity, StyleSheet,
     LayoutAnimation, UIManager, Platform, Switch
 } from 'react-native';
-import { colors, type, radius, spacing, CATEGORIES } from '../theme';
+import { type, radius, spacing, CATEGORIES } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 import { formatCurrency } from '../lib/analytics';
 import { formatDate } from '../lib/dateParser';
 
@@ -16,10 +17,13 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function TransactionCard({ transaction, onEditPress, onExcludeToggle }) {
+    const { colors } = useTheme();
+    const st = makeStyles(colors);
+
     const [expanded, setExpanded] = useState(false);
 
     const cat        = CATEGORIES[transaction.category];
-    const catColor   = cat?.color ?? colors.text.muted;
+    const catColor   = colors.category[transaction.category] ?? colors.text.muted;
     const catLabel   = cat?.label ?? 'Uncategorized';
     const catIcon    = cat?.icon  ?? '❓';
     const isDebit    = transaction.type === 'debit';
@@ -108,7 +112,7 @@ export default function TransactionCard({ transaction, onEditPress, onExcludeTog
                             value={isExcluded}
                             onValueChange={(val) => onExcludeToggle?.(transaction, val)}
                             trackColor={{ false: colors.surface.containerHighest, true: colors.primary.main }}
-                            thumbColor={isExcluded ? '#fff' : colors.text.muted}
+                            thumbColor={isExcluded ? '#FFFFFF' : colors.text.muted}
                         />
                     </View>
                 </View>
@@ -117,7 +121,7 @@ export default function TransactionCard({ transaction, onEditPress, onExcludeTog
     );
 }
 
-const st = StyleSheet.create({
+function makeStyles(colors) { return StyleSheet.create({
     card: {
         paddingVertical: spacing.lg,
         borderBottomWidth: 1,
@@ -197,4 +201,4 @@ const st = StyleSheet.create({
     },
     excludeTitle: { ...type.bodyM, color: colors.text.headline, fontWeight: '500' },
     excludeSub: { ...type.labelS, color: colors.text.muted, marginTop: 2 },
-});
+}); }

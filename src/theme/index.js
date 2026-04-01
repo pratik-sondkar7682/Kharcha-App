@@ -8,72 +8,138 @@
  * - Playful, organic feel
  */
 
-export const colors = {
-  // Surface layers — warm deep tones
+// Category colors for dark mode (vivid, high contrast on dark surfaces)
+const categoryColors = {
+  food: '#F97316',
+  shopping: '#F472B6',
+  transport: '#60A5FA',
+  bills: '#A78BFA',
+  health: '#2DD4BF',
+  entertainment: '#E879F9',
+  transfers: '#818CF8',
+  rent: '#34D399',
+  education: '#4ADE80',
+  groceries: '#FBBF24',
+  uncategorized: '#6B7280',
+  refund: '#34D399',
+  investment: '#8B5CF6',
+  internal_transfer: '#9CA3AF',
+  hardware: '#D97706',
+  atm: '#F59E0B',
+  credit_card: '#38BDF8',
+};
+
+// Category colors for light mode (deeper, readable on white surfaces)
+const lightCategoryColors = {
+  food: '#C2410C',
+  shopping: '#BE185D',
+  transport: '#1D4ED8',
+  bills: '#6D28D9',
+  health: '#0F766E',
+  entertainment: '#7E22CE',
+  transfers: '#4338CA',
+  rent: '#047857',
+  education: '#15803D',
+  groceries: '#B45309',
+  uncategorized: '#4B5563',
+  refund: '#047857',
+  investment: '#5B21B6',
+  internal_transfer: '#6B7280',
+  hardware: '#92400E',
+  atm: '#92400E',
+  credit_card: '#0369A1',
+};
+
+const darkColors = {
   surface: {
-    base: '#0F1116',           // Darkest background
-    container: '#1B1D24',      // Card backgrounds
-    containerHigh: '#252830',  // Elevated cards/modals
-    containerHighest: '#2F323B', // Active states
-    dim: '#13151B',            // Slightly lighter than base
+    base: '#0F1116',
+    container: '#1B1D24',
+    containerHigh: '#252830',
+    containerHighest: '#2F323B',
+    dim: '#13151B',
   },
-  // Primary — expressive purple-blue gradient feel
   primary: {
-    main: '#A78BFA',           // Vivid lavender
-    container: '#2D2254',      // Dark purple container
-    onContainer: '#D4BBFF',    // Text on dark container
-    bright: '#C4B5FD',         // Highlighted primary
-    dim: '#7C3AED',            // Pressed/active state
+    main: '#A78BFA',
+    container: '#2D2254',
+    onContainer: '#D4BBFF',
+    bright: '#C4B5FD',
+    dim: '#7C3AED',
   },
-  // Secondary — mint/teal accent  
   secondary: {
-    main: '#34D399',           // Mint green
-    container: '#1A3D2F',      // Dark green container
-    onContainer: '#6EE7B7',    // Text on container
+    main: '#34D399',
+    container: '#1A3D2F',
+    onContainer: '#6EE7B7',
   },
-  // Tertiary — warm coral
   tertiary: {
-    main: '#FB7185',           // Coral pink
-    container: '#3D1A23',      // Dark coral container
-    onContainer: '#FCA5B3',    // Text on container
+    main: '#FB7185',
+    container: '#3D1A23',
+    onContainer: '#FCA5B3',
   },
-  // Semantic
-  income: '#34D399',           // Green — money received
-  expense: '#FB7185',          // Coral — money spent
-  warning: '#FBBF24',         // Amber — budget warning
-  // Text — clear hierarchy
+  income: '#34D399',
+  expense: '#FB7185',
+  warning: '#FBBF24',
   text: {
-    headline: '#F5F5F7',       // Brightest — headlines
-    body: '#D1D5DB',           // Body text
-    secondary: '#9CA3AF',      // Secondary info
-    muted: '#6B7280',          // Least emphasis
+    headline: '#F5F5F7',
+    body: '#D1D5DB',
+    secondary: '#9CA3AF',
+    muted: '#6B7280',
   },
-  // Borders & dividers
   outline: {
     default: 'rgba(255,255,255,0.07)',
     variant: 'rgba(255,255,255,0.12)',
     focus: 'rgba(167,139,250,0.4)',
   },
-  // Category colors — vibrant, accessible, M3 Expressive style
-  category: {
-    food: '#F97316',  // Warm orange
-    shopping: '#F472B6',  // Pink
-    transport: '#60A5FA',  // Sky blue
-    bills: '#A78BFA',  // Lavender
-    health: '#2DD4BF',  // Teal
-    entertainment: '#E879F9',  // Magenta
-    transfers: '#818CF8',  // Indigo
-    rent: '#34D399',  // Emerald
-    education: '#4ADE80',  // Lime green
-    groceries: '#FBBF24',  // Amber
-    uncategorized: '#6B7280',  // Gray
-    refund: '#34D399',  // Green
-    investment: '#8B5CF6', // Purple
-    internal_transfer: '#9CA3AF', // Neutral gray
-    hardware: '#D97706', // Dark amber/brown
-    atm: '#F59E0B', // Amber — cash
-  },
+  category: categoryColors,
 };
+
+const lightColors = {
+  surface: {
+    base: '#F0F2F8',
+    container: '#FFFFFF',
+    containerHigh: '#E4E7F0',
+    containerHighest: '#D2D6E4',
+    dim: '#E8EBF3',
+  },
+  primary: {
+    main: '#6D28D9',
+    container: '#EDE9FE',
+    onContainer: '#4C1D95',
+    bright: '#5B21B6',
+    dim: '#4C1D95',
+  },
+  secondary: {
+    main: '#047857',
+    container: '#CCFBF1',
+    onContainer: '#064E3B',
+  },
+  tertiary: {
+    main: '#BE123C',
+    container: '#FFE4E6',
+    onContainer: '#881337',
+  },
+  income: '#047857',
+  expense: '#BE123C',
+  warning: '#B45309',
+  text: {
+    headline: '#0D0F14',
+    body: '#1F2937',
+    secondary: '#4B5563',
+    muted: '#6B7280',
+  },
+  outline: {
+    default: 'rgba(0,0,0,0.10)',
+    variant: 'rgba(0,0,0,0.16)',
+    focus: 'rgba(109,40,217,0.35)',
+  },
+  category: lightCategoryColors,
+};
+
+export function getColors(isDark = true) {
+  return isDark ? darkColors : lightColors;
+}
+
+// Default export — dark mode (backwards compat for static imports)
+export const colors = darkColors;
 
 // M3 Expressive: larger, bolder corner radii
 export const radius = {
@@ -130,4 +196,5 @@ export const CATEGORIES = {
   internal_transfer: { label: 'Self Transfer', icon: '🔄', color: colors.category.internal_transfer },
   hardware: { label: 'Hardware', icon: '🔨', color: colors.category.hardware },
   atm: { label: 'ATM / Cash', icon: '🏧', color: colors.category.atm },
+  credit_card: { label: 'Credit Card', icon: '💳', color: colors.category.credit_card },
 };
