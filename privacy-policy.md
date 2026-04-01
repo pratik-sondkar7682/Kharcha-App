@@ -2,7 +2,7 @@
 
 **Effective date:** 1 April 2026
 **App:** Kharcha — SMS Expense Tracker
-**Developer:** Antigravity Projects
+**Developer:** Pratik Suresh Sondkar
 **Contact:** pratiksondkar1994@gmail.com
 
 ---
