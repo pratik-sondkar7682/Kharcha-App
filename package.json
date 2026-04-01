@@ -7,15 +7,19 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
     "@react-navigation/bottom-tabs": "^7.15.7",
     "@react-navigation/native": "^7.2.0",
+    "@sentry/react-native": "~6.6.0",
     "expo": "~55.0.8",
+    "expo-file-system": "~55.0.12",
     "expo-font": "^55.0.4",
-"expo-sqlite": "^55.0.11",
+    "expo-sharing": "~55.0.14",
+    "expo-sqlite": "^55.0.11",
     "expo-status-bar": "~55.0.4",
     "react": "19.2.0",
     "react-dom": "^19.2.0",
@@ -28,13 +32,14 @@
     "react-native-screens": "^4.24.0",
     "react-native-svg": "^15.15.4",
     "react-native-web": "^0.21.2",
-    "@sentry/react-native": "~6.6.0"
+    "tslib": "^2.8.1"
   },
   "private": true,
   "devDependencies": {
     "@babel/preset-env": "^7.29.2",
     "babel-jest": "^30.3.0",
     "babel-preset-expo": "^55.0.12",
-    "jest": "^30.3.0"
+    "jest": "^30.3.0",
+    "patch-package": "^8.0.1"
   }
 }

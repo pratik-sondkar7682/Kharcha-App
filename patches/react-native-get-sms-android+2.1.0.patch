@@ -1,0 +1,713 @@
+diff --git a/node_modules/react-native-get-sms-android/android/build.gradle b/node_modules/react-native-get-sms-android/android/build.gradle
+index 0de40fc..40542bd 100644
+--- a/node_modules/react-native-get-sms-android/android/build.gradle
++++ b/node_modules/react-native-get-sms-android/android/build.gradle
+@@ -2,11 +2,11 @@
+ buildscript {
+     repositories {
+         google()
+-        jcenter()
++        mavenCentral()
+     }
+ 
+     dependencies {
+-        classpath 'com.android.tools.build:gradle:3.3.1'
++        classpath 'com.android.tools.build:gradle:8.3.0'
+     }
+ }
+ 
+@@ -17,11 +17,12 @@ def safeExtGet(prop, fallback) {
+ }
+ 
+ android {
+-    compileSdkVersion safeExtGet('compileSdkVersion', 28)
++    compileSdkVersion safeExtGet('compileSdkVersion', 34)
++    namespace "com.react"
+ 
+     defaultConfig {
+-        minSdkVersion safeExtGet('minSdkVersion', 16)
+-        targetSdkVersion safeExtGet('targetSdkVersion', 28)
++        minSdkVersion safeExtGet('minSdkVersion', 21)
++        targetSdkVersion safeExtGet('targetSdkVersion', 34)
+         versionCode 1
+         versionName "1.0.0"
+     }
+@@ -32,11 +33,11 @@ android {
+ 
+ repositories {
+     google()
++    mavenCentral()
+     maven {
+         // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
+         url "$rootDir/../node_modules/react-native/android"
+     }
+-    jcenter()
+ }
+ 
+ dependencies {
+diff --git a/node_modules/react-native-get-sms-android/android/build/.transforms/bbd9ba7774b87fb1ac6376de83f5d2e6/results.bin b/node_modules/react-native-get-sms-android/android/build/.transforms/bbd9ba7774b87fb1ac6376de83f5d2e6/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/.transforms/bbd9ba7774b87fb1ac6376de83f5d2e6/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/react-native-get-sms-android/android/build/.transforms/bbd9ba7774b87fb1ac6376de83f5d2e6/transformed/classes/classes_dex/classes.dex b/node_modules/react-native-get-sms-android/android/build/.transforms/bbd9ba7774b87fb1ac6376de83f5d2e6/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..915c388
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/.transforms/bbd9ba7774b87fb1ac6376de83f5d2e6/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/results.bin b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/results.bin
+new file mode 100644
+index 0000000..7ed749e
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/results.bin
+@@ -0,0 +1 @@
++o/bundleLibRuntimeToDirDebug
+diff --git a/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/BuildConfig.dex b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/BuildConfig.dex
+new file mode 100644
+index 0000000..dbf8ab4
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/BuildConfig.dex differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsModule$1.dex b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsModule$1.dex
+new file mode 100644
+index 0000000..4d88973
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsModule$1.dex differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsModule$2.dex b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsModule$2.dex
+new file mode 100644
+index 0000000..15f0082
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsModule$2.dex differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsModule.dex b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsModule.dex
+new file mode 100644
+index 0000000..7c5e7c4
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsModule.dex differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsPackage.dex b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsPackage.dex
+new file mode 100644
+index 0000000..fc304c9
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/bundleLibRuntimeToDirDebug_dex/com/react/SmsPackage.dex differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/desugar_graph.bin b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/desugar_graph.bin
+new file mode 100644
+index 0000000..add859f
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/.transforms/d942c09b54bcb54338e47b05ccc868ab/transformed/bundleLibRuntimeToDirDebug/desugar_graph.bin differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/generated/source/buildConfig/debug/com/react/BuildConfig.java b/node_modules/react-native-get-sms-android/android/build/generated/source/buildConfig/debug/com/react/BuildConfig.java
+new file mode 100644
+index 0000000..a0fc41d
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/generated/source/buildConfig/debug/com/react/BuildConfig.java
+@@ -0,0 +1,10 @@
++/**
++ * Automatically generated file. DO NOT MODIFY
++ */
++package com.react;
++
++public final class BuildConfig {
++  public static final boolean DEBUG = Boolean.parseBoolean("true");
++  public static final String LIBRARY_PACKAGE_NAME = "com.react";
++  public static final String BUILD_TYPE = "debug";
++}
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml b/node_modules/react-native-get-sms-android/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+new file mode 100644
+index 0000000..da3ec69
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.react" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json b/node_modules/react-native-get-sms-android/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+new file mode 100644
+index 0000000..34b23ef
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+@@ -0,0 +1,18 @@
++{
++  "version": 3,
++  "artifactType": {
++    "type": "AAPT_FRIENDLY_MERGED_MANIFESTS",
++    "kind": "Directory"
++  },
++  "applicationId": "com.react",
++  "variantName": "debug",
++  "elements": [
++    {
++      "type": "SINGLE",
++      "filters": [],
++      "attributes": [],
++      "outputFile": "AndroidManifest.xml"
++    }
++  ],
++  "elementType": "File"
++}
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties b/node_modules/react-native-get-sms-android/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+new file mode 100644
+index 0000000..1211b1e
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+@@ -0,0 +1,6 @@
++aarFormatVersion=1.0
++aarMetadataVersion=1.0
++minCompileSdk=1
++minCompileSdkExtension=0
++minAndroidGradlePluginVersion=1.0.0
++coreLibraryDesugaringEnabled=false
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json b/node_modules/react-native-get-sms-android/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+new file mode 100644
+index 0000000..9e26dfe
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+@@ -0,0 +1 @@
++{}
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar b/node_modules/react-native-get-sms-android/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar
+new file mode 100644
+index 0000000..82b4c1f
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/react-native-get-sms-android/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
+new file mode 100644
+index 0000000..3b2d7fe
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt b/node_modules/react-native-get-sms-android/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+new file mode 100644
+index 0000000..509b7b1
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+@@ -0,0 +1 @@
++#Mon Mar 30 23:58:35 IST 2026
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+new file mode 100644
+index 0000000..e01d504
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug" generated-set="debug$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/debug/res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/build/generated/res/resValues/debug"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/build/generated/res/resValues/debug"/></dataSet><mergedItems/></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/mergeDebugAssets/merger.xml b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+new file mode 100644
+index 0000000..e8f2357
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/assets"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/debug/assets"/></dataSet><dataSet config="generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/build/intermediates/shader_assets/debug/compileDebugShaders/out"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+new file mode 100644
+index 0000000..fb6c9f0
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/jniLibs"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/debug/jniLibs"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/mergeDebugShaders/merger.xml b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+new file mode 100644
+index 0000000..b37e91a
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/shaders"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="/Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/debug/shaders"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/BuildConfig.class b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/BuildConfig.class
+new file mode 100644
+index 0000000..6cd982e
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/BuildConfig.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsModule$1.class b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsModule$1.class
+new file mode 100644
+index 0000000..2ab741e
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsModule$1.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsModule$2.class b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsModule$2.class
+new file mode 100644
+index 0000000..582611f
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsModule$2.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsModule.class b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsModule.class
+new file mode 100644
+index 0000000..b603e88
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsModule.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsPackage.class b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsPackage.class
+new file mode 100644
+index 0000000..89cb791
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/react/SmsPackage.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt b/node_modules/react-native-get-sms-android/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+new file mode 100644
+index 0000000..78ac5b8
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+@@ -0,0 +1,2 @@
++R_DEF: Internal format may change without notice
++local
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt b/node_modules/react-native-get-sms-android/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+new file mode 100644
+index 0000000..e097f2d
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+@@ -0,0 +1,7 @@
++1<?xml version="1.0" encoding="utf-8"?>
++2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++3    package="com.react" >
++4
++5    <uses-sdk android:minSdkVersion="24" />
++6
++7</manifest>
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml b/node_modules/react-native-get-sms-android/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+new file mode 100644
+index 0000000..da3ec69
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.react" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json b/node_modules/react-native-get-sms-android/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+new file mode 100644
+index 0000000..0637a08
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+@@ -0,0 +1 @@
++[]
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt b/node_modules/react-native-get-sms-android/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+new file mode 100644
+index 0000000..08f4ebe
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+@@ -0,0 +1 @@
++0 Warning/Error
+\ No newline at end of file
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/BuildConfig.class b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/BuildConfig.class
+new file mode 100644
+index 0000000..6cd982e
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/BuildConfig.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsModule$1.class b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsModule$1.class
+new file mode 100644
+index 0000000..2ab741e
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsModule$1.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsModule$2.class b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsModule$2.class
+new file mode 100644
+index 0000000..582611f
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsModule$2.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsModule.class b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsModule.class
+new file mode 100644
+index 0000000..b603e88
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsModule.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsPackage.class b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsPackage.class
+new file mode 100644
+index 0000000..89cb791
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_dir/debug/bundleLibRuntimeToDirDebug/com/react/SmsPackage.class differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar
+new file mode 100644
+index 0000000..e3a4ac3
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt b/node_modules/react-native-get-sms-android/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+new file mode 100644
+index 0000000..fc731e5
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+@@ -0,0 +1 @@
++com.react
+diff --git a/node_modules/react-native-get-sms-android/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/react-native-get-sms-android/android/build/outputs/logs/manifest-merger-debug-report.txt
+new file mode 100644
+index 0000000..df7c8fe
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/build/outputs/logs/manifest-merger-debug-report.txt
+@@ -0,0 +1,16 @@
++-- Merging decision tree log ---
++manifest
++ADDED from /Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml:2:1-3:12
++INJECTED from /Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml:2:1-3:12
++	package
++		INJECTED from /Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
++	xmlns:android
++		ADDED from /Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml:2:11-69
++uses-sdk
++INJECTED from /Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
++INJECTED from /Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
++INJECTED from /Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
++	android:targetSdkVersion
++		INJECTED from /Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
++	android:minSdkVersion
++		INJECTED from /Users/pratiksondkar/Antigravity Projects/Personal Project/Development ideas/Kharcha/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
+diff --git a/node_modules/react-native-get-sms-android/android/build/tmp/compileDebugJavaWithJavac/compileTransaction/stash-dir/BuildConfig.class.uniqueId0 b/node_modules/react-native-get-sms-android/android/build/tmp/compileDebugJavaWithJavac/compileTransaction/stash-dir/BuildConfig.class.uniqueId0
+new file mode 100644
+index 0000000..fac8a51
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/tmp/compileDebugJavaWithJavac/compileTransaction/stash-dir/BuildConfig.class.uniqueId0 differ
+diff --git a/node_modules/react-native-get-sms-android/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin b/node_modules/react-native-get-sms-android/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin
+new file mode 100644
+index 0000000..6a5c3d4
+Binary files /dev/null and b/node_modules/react-native-get-sms-android/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin differ
+diff --git a/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml b/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
+index 3473b6c..a2af051 100644
+--- a/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
++++ b/node_modules/react-native-get-sms-android/android/src/main/AndroidManifest.xml
+@@ -1,5 +1,4 @@
+ 
+-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+-          package="com.react">
++<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ </manifest>
+ 
+diff --git a/node_modules/react-native-get-sms-android/android/src/main/java/com/react/SmsAndroid/SmsModule.java b/node_modules/react-native-get-sms-android/android/src/main/java/com/react/SmsAndroid/SmsModule.java
+new file mode 100644
+index 0000000..16313db
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/src/main/java/com/react/SmsAndroid/SmsModule.java
+@@ -0,0 +1,304 @@
++
++package com.react.SmsAndroid;
++
++import com.facebook.react.bridge.Arguments;
++import com.facebook.react.bridge.Callback;
++import com.facebook.react.bridge.NativeModule;
++import com.facebook.react.bridge.ReactApplicationContext;
++import com.facebook.react.bridge.ReactContext;
++import com.facebook.react.modules.core.DeviceEventManagerModule;
++import com.facebook.react.bridge.ReactContextBaseJavaModule;
++import com.facebook.react.bridge.ReactMethod;
++import com.facebook.react.bridge.ReadableMap;
++import com.facebook.react.bridge.WritableMap;
++
++import android.content.ContentValues;
++import android.os.Bundle;
++import android.widget.Toast;
++import android.app.LoaderManager;
++import android.app.PendingIntent;
++import android.app.PendingIntent.CanceledException;
++import android.content.ContentResolver;
++import android.content.CursorLoader;
++import android.content.Intent;
++import android.content.Loader;
++import android.content.Context;
++import android.database.Cursor;
++import android.net.Uri;
++import android.app.Activity;
++import android.content.BroadcastReceiver;
++import android.content.IntentFilter;
++
++import android.telephony.SmsManager;
++import android.telephony.SmsMessage;
++
++import java.util.HashMap;
++import java.util.Map;
++import java.util.ArrayList;
++
++import org.json.JSONArray;
++import org.json.JSONException;
++import org.json.JSONObject;
++
++public class SmsModule extends ReactContextBaseJavaModule /*implements LoaderManager.LoaderCallbacks<Cursor>*/ {
++    //    private LoaderManager mManager;
++    private Cursor smsCursor;
++    private Map<Long, String> smsList;
++    private Map<Long, Object> smsListBody;
++    Activity mActivity = null;
++    private static Context context;
++    private ReactContext mReactContext;
++    private Callback cb_autoSend_succ = null;
++    private Callback cb_autoSend_err = null;
++
++    public SmsModule(ReactApplicationContext reactContext) {
++        super(reactContext);
++        mReactContext = reactContext;
++        smsList = new HashMap<Long, String>();
++        context = reactContext.getApplicationContext();
++    }
++
++    @Override
++    public String getName() {
++        return "Sms";
++    }
++
++    @ReactMethod
++    public void list(String filter, final Callback errorCallback, final Callback successCallback) {
++        try {
++            JSONObject filterJ = new JSONObject(filter);
++            String uri_filter = filterJ.has("box") ? filterJ.optString("box") : "inbox";
++            int fread = filterJ.has("read") ? filterJ.optInt("read") : -1;
++            int fid = filterJ.has("_id") ? filterJ.optInt("_id") : -1;
++            int ftid = filterJ.has("thread_id") ? filterJ.optInt("thread_id") : -1;
++            String faddress = filterJ.optString("address");
++            String fcontent = filterJ.optString("body");
++            String fContentRegex = filterJ.optString("bodyRegex");
++            int indexFrom = filterJ.has("indexFrom") ? filterJ.optInt("indexFrom") : 0;
++            int maxCount = filterJ.has("maxCount") ? filterJ.optInt("maxCount") : -1;
++            String selection = filterJ.has("selection") ? filterJ.optString("selection") : "";
++            String sortOrder = filterJ.has("sortOrder") ? filterJ.optString("sortOrder") : null;
++            long maxDate = filterJ.has("maxDate") ? filterJ.optLong("maxDate") : -1;
++            long minDate = filterJ.has("minDate") ? filterJ.optLong("minDate") : -1;
++            Cursor cursor = context.getContentResolver().query(Uri.parse("content://sms/" + uri_filter), null, selection, null,
++                    sortOrder);
++            int c = 0;
++            JSONArray jsons = new JSONArray();
++
++            while (cursor != null && cursor.moveToNext()) {
++                boolean matchFilter = true;
++                if (fid > -1)
++                    matchFilter = fid == cursor.getInt(cursor.getColumnIndex("_id"));
++                else if (ftid > -1)
++                    matchFilter = ftid == cursor.getInt(cursor.getColumnIndex("thread_id"));
++                else if (fread > -1)
++                    matchFilter = fread == cursor.getInt(cursor.getColumnIndex("read"));
++                else if (faddress != null && !faddress.isEmpty())
++                    matchFilter = faddress.equals(cursor.getString(cursor.getColumnIndex("address")).trim());
++                else if (fcontent != null && !fcontent.isEmpty())
++                    matchFilter = fcontent.equals(cursor.getString(cursor.getColumnIndex("body")).trim());
++
++                if (fContentRegex != null && !fContentRegex.isEmpty())
++                    matchFilter = matchFilter && cursor.getString(cursor.getColumnIndex("body")).matches(fContentRegex);
++                if (maxDate > -1)
++                    matchFilter = matchFilter && maxDate >= cursor.getLong(cursor.getColumnIndex("date"));
++                if (minDate > -1)
++                    matchFilter = matchFilter && minDate <= cursor.getLong(cursor.getColumnIndex("date"));
++                if (matchFilter) {
++                    if (c >= indexFrom) {
++                        if (maxCount > 0 && c >= indexFrom + maxCount)
++                            break;
++                        // Long dateTime = Long.parseLong(cursor.getString(cursor.getColumnIndex("date")));
++                        // String message = cursor.getString(cursor.getColumnIndex("body"));
++                        JSONObject json;
++                        json = getJsonFromCursor(cursor);
++                        jsons.put(json);
++
++                    }
++                    c++;
++                }
++            }
++            cursor.close();
++            try {
++                successCallback.invoke(c, jsons.toString());
++            } catch (Exception e) {
++                errorCallback.invoke(e.getMessage());
++            }
++        } catch (JSONException e) {
++            errorCallback.invoke(e.getMessage());
++            return;
++        }
++    }
++
++    private JSONObject getJsonFromCursor(Cursor cur) {
++        JSONObject json = new JSONObject();
++
++        int nCol = cur.getColumnCount();
++        String[] keys = cur.getColumnNames();
++        try {
++            for (int j = 0; j < nCol; j++)
++                switch (cur.getType(j)) {
++                    case Cursor.FIELD_TYPE_NULL:
++                        json.put(keys[j], null);
++                        break;
++                    case Cursor.FIELD_TYPE_INTEGER:
++                        json.put(keys[j], cur.getLong(j));
++                        break;
++                    case Cursor.FIELD_TYPE_FLOAT:
++                        json.put(keys[j], cur.getFloat(j));
++                        break;
++                    case Cursor.FIELD_TYPE_STRING:
++                        json.put(keys[j], cur.getString(j));
++                        break;
++                    case Cursor.FIELD_TYPE_BLOB:
++                        json.put(keys[j], cur.getBlob(j));
++                }
++        } catch (Exception e) {
++            return null;
++        }
++
++        return json;
++    }
++
++    @ReactMethod
++    public void send(String addresses, String text, final Callback errorCallback, final Callback successCallback) {
++        mActivity = getCurrentActivity();
++        try {
++            JSONObject jsonObject = new JSONObject(addresses);
++            JSONArray addressList = jsonObject.getJSONArray("addressList");
++            int n;
++            if ((n = addressList.length()) > 0) {
++                PendingIntent sentIntent = PendingIntent.getBroadcast(mActivity, 0, new Intent("SENDING_SMS"), 0);
++                SmsManager sms = SmsManager.getDefault();
++                for (int i = 0; i < n; i++) {
++                    String address;
++                    if ((address = addressList.optString(i)).length() > 0)
++                        sms.sendTextMessage(address, null, text, sentIntent, null);
++                }
++            } else {
++                PendingIntent sentIntent = PendingIntent.getActivity(mActivity, 0, new Intent("android.intent.action.VIEW"), 0);
++                Intent intent = new Intent("android.intent.action.VIEW");
++                intent.putExtra("sms_body", text);
++                intent.setData(Uri.parse("sms:"));
++                try {
++                    sentIntent.send(mActivity.getApplicationContext(), 0, intent);
++                    successCallback.invoke("OK");
++                } catch (PendingIntent.CanceledException e) {
++                    errorCallback.invoke(e.getMessage());
++                    return;
++                }
++            }
++            return;
++        } catch (JSONException e) {
++            errorCallback.invoke(e.getMessage());
++            return;
++        }
++
++    }
++
++    @ReactMethod
++    public void delete(Integer id, final Callback errorCallback, final Callback successCallback) {
++        try {
++            int res = context.getContentResolver().delete(Uri.parse("content://sms/" + id), null, null);
++            if (res > 0) {
++                successCallback.invoke("OK");
++            } else {
++                errorCallback.invoke("SMS not found");
++            }
++            return;
++        } catch (Exception e) {
++            errorCallback.invoke(e.getMessage());
++            return;
++        }
++    }
++
++    private void sendEvent(ReactContext reactContext, String eventName, String params) {
++        reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class).emit(eventName, params);
++    }
++
++    private void sendCallback(String message, boolean success) {
++        if (success && cb_autoSend_succ != null) {
++            cb_autoSend_succ.invoke(message);
++            cb_autoSend_succ = null;
++        } else if (!success && cb_autoSend_err != null) {
++            cb_autoSend_err.invoke(message);
++            cb_autoSend_err = null;
++        }
++
++    }
++
++
++    @ReactMethod
++    public void autoSend(String phoneNumber, String message, final Callback errorCallback,
++                         final Callback successCallback) {
++
++        cb_autoSend_succ = successCallback;
++        cb_autoSend_err = errorCallback;
++
++        try {
++            String SENT = "SMS_SENT";
++            String DELIVERED = "SMS_DELIVERED";
++            ArrayList<PendingIntent> sentPendingIntents = new ArrayList<PendingIntent>();
++            ArrayList<PendingIntent> deliveredPendingIntents = new ArrayList<PendingIntent>();
++
++            PendingIntent sentPI = PendingIntent.getBroadcast(context, 0, new Intent(SENT), 0);
++            PendingIntent deliveredPI = PendingIntent.getBroadcast(context, 0, new Intent(DELIVERED), 0);
++
++            //---when the SMS has been sent---
++            context.registerReceiver(new BroadcastReceiver() {
++                @Override
++                public void onReceive(Context arg0, Intent arg1) {
++                    switch (getResultCode()) {
++                        case Activity.RESULT_OK:
++                            sendCallback("SMS sent", true);
++                            break;
++                        case SmsManager.RESULT_ERROR_GENERIC_FAILURE:
++                            sendCallback("Generic failure", false);
++                            break;
++                        case SmsManager.RESULT_ERROR_NO_SERVICE:
++                            sendCallback("No service", false);
++                            break;
++                        case SmsManager.RESULT_ERROR_NULL_PDU:
++                            sendCallback("Null PDU", false);
++                            break;
++                        case SmsManager.RESULT_ERROR_RADIO_OFF:
++                            sendCallback("Radio off", false);
++                            break;
++                    }
++                }
++            }, new IntentFilter(SENT));
++
++            //---when the SMS has been delivered---
++            context.registerReceiver(new BroadcastReceiver() {
++                @Override
++                public void onReceive(Context arg0, Intent arg1) {
++                    switch (getResultCode()) {
++                        case Activity.RESULT_OK:
++                            sendEvent(mReactContext, "sms_onDelivery", "SMS delivered");
++                            break;
++                        case Activity.RESULT_CANCELED:
++                            sendEvent(mReactContext, "sms_onDelivery", "SMS not delivered");
++                            break;
++                    }
++                }
++            }, new IntentFilter(DELIVERED));
++
++            SmsManager sms = SmsManager.getDefault();
++            ArrayList<String> parts = sms.divideMessage(message);
++
++            for (int i = 0; i < parts.size(); i++) {
++                sentPendingIntents.add(i, sentPI);
++                deliveredPendingIntents.add(i, deliveredPI);
++            }
++            sms.sendMultipartTextMessage(phoneNumber, null, parts, sentPendingIntents, deliveredPendingIntents);
++
++            ContentValues values = new ContentValues();
++            values.put("address", phoneNumber);
++            values.put("body", message);
++            context.getContentResolver().insert(Uri.parse("content://sms/sent"), values);
++
++        } catch (Exception e) {
++            sendCallback(e.getMessage(), false);
++        }
++    }
++}
+diff --git a/node_modules/react-native-get-sms-android/android/src/main/java/com/react/SmsAndroid/SmsPackage.java b/node_modules/react-native-get-sms-android/android/src/main/java/com/react/SmsAndroid/SmsPackage.java
+new file mode 100644
+index 0000000..23b5757
+--- /dev/null
++++ b/node_modules/react-native-get-sms-android/android/src/main/java/com/react/SmsAndroid/SmsPackage.java
+@@ -0,0 +1,36 @@
++
++package com.react.SmsAndroid;
++
++import android.app.Activity;
++
++import com.facebook.react.ReactPackage;
++import com.facebook.react.bridge.JavaScriptModule;
++import com.facebook.react.bridge.NativeModule;
++import com.facebook.react.bridge.ReactApplicationContext;
++import com.facebook.react.uimanager.ViewManager;
++
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.List;
++
++
++
++public class SmsPackage implements ReactPackage {
++
++    @Override
++    public List<NativeModule> createNativeModules(ReactApplicationContext reactApplicationContext) {
++        List<NativeModule> modules = new ArrayList<>();
++        modules.add(new SmsModule(reactApplicationContext));
++        return modules;
++    }
++
++    public List<Class<? extends JavaScriptModule>> createJSModules() {
++        return Collections.emptyList();
++    }
++
++    @Override
++    public List<ViewManager> createViewManagers(ReactApplicationContext reactApplicationContext) {
++        return Arrays.<ViewManager>asList();
++    }
++}
