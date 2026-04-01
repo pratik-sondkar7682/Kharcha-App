@@ -11,12 +11,13 @@
 export function monthlySummary(transactions) {
     let totalSpent = 0;
     let totalReceived = 0;
-    let count = transactions.length;
+    let count = 0;
 
     for (const txn of transactions) {
         if (txn.category === 'internal_transfer') continue;
         if (txn.isExcluded) continue;
 
+        count++;
         if (txn.type === 'debit') {
             totalSpent += txn.amount;
         } else if (txn.type === 'credit') {
@@ -87,13 +88,19 @@ export function dailyTrend(transactions, endDate, startDate) {
     if (diffDays > 90) diffDays = 90;
     if (diffDays < 0) diffDays = 0;
 
+    const byDate = {};
+    for (const t of transactions) {
+        if (t.type !== 'debit' || t.isExcluded) continue;
+        const txnDate = t.date.split('T')[0]; // normalise ISO datetime → YYYY-MM-DD
+        byDate[txnDate] = (byDate[txnDate] || 0) + Math.abs(t.amount);
+    }
+
     for (let i = diffDays; i >= 0; i--) {
         const d = new Date(end);
         d.setDate(d.getDate() - i);
 
         const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        const dayTxns = transactions.filter(t => t.date === dateStr && t.type === 'debit' && !t.isExcluded);
-        const total = dayTxns.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        const total = byDate[dateStr] || 0;
 
         result.push({
             date: dateStr,
@@ -187,7 +194,7 @@ export function averageDailySpend(transactions, startDate, endDate) {
         const end = new Date(endDate);
         days = Math.max(1, Math.abs(Math.ceil((end - start) / (1000 * 60 * 60 * 24))) + 1);
     } else {
-        const dates = new Set(debits.map(t => t.date));
+        const dates = new Set(debits.map(t => t.date.split('T')[0]));
         days = Math.max(1, dates.size);
     }
 
@@ -249,18 +256,30 @@ export function getPreviousPeriodRange(startDate, endDate) {
     const start = new Date(startDate);
     const end = new Date(endDate);
 
-    const prevStart = new Date(start);
-    prevStart.setMonth(prevStart.getMonth() - 1);
-
-    const prevEnd = new Date(end);
-    prevEnd.setMonth(prevEnd.getMonth() - 1);
-
     const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-    return {
-        startDate: formatDate(prevStart),
-        endDate: formatDate(prevEnd)
-    };
+    // If the range is a full month (start = 1st, end = last day or today), compare against full previous month
+    const isMonthStart = start.getDate() === 1;
+    const endIsLastDayOrToday = (() => {
+        const lastDay = new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate();
+        return end.getDate() === lastDay || end.toDateString() === new Date().toDateString();
+    })();
+
+    if (isMonthStart && endIsLastDayOrToday) {
+        // Full previous calendar month: 1st → last day
+        const prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
+        const prevEnd   = new Date(start.getFullYear(), start.getMonth(), 0); // last day of prev month
+        return { startDate: formatDate(prevStart), endDate: formatDate(prevEnd) };
+    }
+
+    // For custom or partial ranges: shift back by the same number of days
+    const rangeDays = Math.round((end - start) / (1000 * 60 * 60 * 24));
+    const prevEnd   = new Date(start);
+    prevEnd.setDate(prevEnd.getDate() - 1);
+    const prevStart = new Date(prevEnd);
+    prevStart.setDate(prevStart.getDate() - rangeDays);
+
+    return { startDate: formatDate(prevStart), endDate: formatDate(prevEnd) };
 }
 
 export const DATE_RANGES = [

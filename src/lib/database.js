@@ -64,6 +64,7 @@ export async function initDatabase() {
       );
       CREATE INDEX IF NOT EXISTS idx_txn_date ON transactions(date);
       CREATE INDEX IF NOT EXISTS idx_txn_category ON transactions(category);
+      CREATE INDEX IF NOT EXISTS idx_txn_rawMerchant ON transactions(rawMerchant);
     `);
 
         await db.execAsync(`
@@ -97,14 +98,14 @@ export async function initDatabase() {
 }
 
 export async function getDB() {
-    if (!dbReady || !global.__kharchaDB) await initDatabase();
+    if (!global.__kharchaDB) await initDatabase();
     return global.__kharchaDB || null;
 }
 
 // ==================== Transaction CRUD ====================
 
 export async function insertTransactions(transactions) {
-    if (Platform.OS === 'web' || !global.__kharchaDB) {
+    if (Platform.OS === 'web') {
         let inserted = 0;
         for (const txn of transactions) {
             if (!memStore.transactions.find(t => t.id === txn.id)) {
@@ -116,29 +117,53 @@ export async function insertTransactions(transactions) {
         return inserted;
     }
 
-    // Native SQLite
-    const db = global.__kharchaDB;
+    const db = await getDB();
+    if (!db) return 0;
+
     let inserted = 0;
     for (const txn of transactions) {
         try {
-            await db.runAsync(
+            const result = await db.runAsync(
                 `INSERT OR IGNORE INTO transactions (id,type,amount,merchant,rawMerchant,account,bank,date,balance,upiRef,category,tier,isExcluded,rawSMS,note,createdAt)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                 [txn.id, txn.type, txn.amount, txn.merchant, txn.rawMerchant, txn.account,
                 txn.bank, txn.date, txn.balance, txn.upiRef, txn.category || 'uncategorized',
                 txn.tier, txn.isExcluded ? 1 : 0, txn.rawSMS, txn.note || null, txn.createdAt]
             );
-            inserted++;
+            if (result.changes > 0) inserted++;
         } catch (e) { console.warn('Insert error:', e.message); }
     }
     return inserted;
 }
 
+const ALLOWED_ORDER = new Set(['date DESC', 'date ASC', 'amount DESC', 'amount ASC']);
+
+/**
+ * Fetch only the fields needed for deduplication hashing — no row limit.
+ * Returns lightweight objects: { upiRef, amount, date, rawMerchant, merchant, type }
+ */
+export async function getTransactionHashFields() {
+    if (Platform.OS === 'web') {
+        return memStore.transactions.map(t => ({
+            upiRef: t.upiRef, amount: t.amount, date: t.date,
+            rawMerchant: t.rawMerchant, merchant: t.merchant, type: t.type,
+        }));
+    }
+    const db = await getDB();
+    if (!db) return [];
+    return await db.getAllAsync(
+        'SELECT upiRef, amount, date, rawMerchant, merchant, type FROM transactions'
+    );
+}
+
 export async function getTransactions(filters = {}, orderBy = 'date DESC', limit = 500) {
-    if (Platform.OS === 'web' || !global.__kharchaDB) {
+    const safeOrder = ALLOWED_ORDER.has(orderBy) ? orderBy : 'date DESC';
+    orderBy = safeOrder;
+
+    if (Platform.OS === 'web') {
         let result = [...memStore.transactions];
         if (filters.startDate) result = result.filter(t => t.date >= filters.startDate);
-        if (filters.endDate) result = result.filter(t => t.date <= filters.endDate);
+        if (filters.endDate) result = result.filter(t => t.date <= filters.endDate + 'T23:59:59.999Z');
         if (filters.category) result = result.filter(t => t.category === filters.category);
         if (filters.type) result = result.filter(t => t.type === filters.type);
         if (filters.search) {
@@ -149,11 +174,14 @@ export async function getTransactions(filters = {}, orderBy = 'date DESC', limit
         return result.slice(0, limit);
     }
 
-    const db = global.__kharchaDB;
+    const db = await getDB();
+    if (!db) return [];
+
     let query = 'SELECT * FROM transactions WHERE 1=1';
     const params = [];
     if (filters.startDate) { query += ' AND date >= ?'; params.push(filters.startDate); }
-    if (filters.endDate) { query += ' AND date <= ?'; params.push(filters.endDate); }
+    // Append T23:59:59.999Z so ISO datetime strings like "2026-04-01T14:30:00Z" are included on endDate day
+    if (filters.endDate) { query += ' AND date <= ?'; params.push(filters.endDate + 'T23:59:59.999Z'); }
     if (filters.category) { query += ' AND category = ?'; params.push(filters.category); }
     if (filters.type) { query += ' AND type = ?'; params.push(filters.type); }
     if (filters.search) { const s = `%${filters.search}%`; query += ' AND (merchant LIKE ? OR note LIKE ?)'; params.push(s, s); }
@@ -205,12 +233,14 @@ export async function updateTransactionExcluded(txnId, isExcluded) {
 }
 
 export async function deleteTransaction(txnId) {
-    if (Platform.OS === 'web' || !global.__kharchaDB) {
+    if (Platform.OS === 'web') {
         memStore.transactions = memStore.transactions.filter(t => t.id !== txnId);
         saveToLocalStorage();
         return;
     }
-    await global.__kharchaDB.runAsync('DELETE FROM transactions WHERE id = ?', [txnId]);
+    const db = await getDB();
+    if (!db) return;
+    await db.runAsync('DELETE FROM transactions WHERE id = ?', [txnId]);
 }
 
 export async function clearAllTransactions() {
@@ -220,45 +250,48 @@ export async function clearAllTransactions() {
         return;
     }
     const db = await getDB();
-    if (!db) {
-        console.warn('clearAllTransactions: DB not available');
-        return;
-    }
+    if (!db) { console.warn('clearAllTransactions: DB not available'); return; }
     await db.runAsync('DELETE FROM transactions');
 }
 
 export async function getTransactionCount() {
-    if (Platform.OS === 'web' || !global.__kharchaDB) {
-        return memStore.transactions.length;
-    }
-    const r = await global.__kharchaDB.getFirstAsync('SELECT COUNT(*) as count FROM transactions');
+    if (Platform.OS === 'web') return memStore.transactions.length;
+    const db = await getDB();
+    if (!db) return 0;
+    const r = await db.getFirstAsync('SELECT COUNT(*) as count FROM transactions');
     return r?.count || 0;
 }
 
 // ==================== Budget CRUD ====================
 
 export async function setBudget(category, monthlyLimit) {
-    if (Platform.OS === 'web' || !global.__kharchaDB) {
+    if (Platform.OS === 'web') {
         const idx = memStore.budgets.findIndex(b => b.category === category);
         const entry = { category, monthlyLimit, updatedAt: new Date().toISOString() };
         if (idx >= 0) memStore.budgets[idx] = entry; else memStore.budgets.push(entry);
         saveToLocalStorage();
         return;
     }
-    await global.__kharchaDB.runAsync(
+    const db = await getDB();
+    if (!db) return;
+    await db.runAsync(
         `INSERT OR REPLACE INTO budgets (category,monthlyLimit,updatedAt) VALUES (?,?,?)`,
         [category, monthlyLimit, new Date().toISOString()]
     );
 }
 
 export async function getBudgets() {
-    if (Platform.OS === 'web' || !global.__kharchaDB) return [...memStore.budgets];
-    return await global.__kharchaDB.getAllAsync('SELECT * FROM budgets');
+    if (Platform.OS === 'web') return [...memStore.budgets];
+    const db = await getDB();
+    if (!db) return [];
+    return await db.getAllAsync('SELECT * FROM budgets');
 }
 
 export async function getBudget(category) {
-    if (Platform.OS === 'web' || !global.__kharchaDB) return memStore.budgets.find(b => b.category === category) || null;
-    return await global.__kharchaDB.getFirstAsync('SELECT * FROM budgets WHERE category = ?', [category]);
+    if (Platform.OS === 'web') return memStore.budgets.find(b => b.category === category) || null;
+    const db = await getDB();
+    if (!db) return null;
+    return await db.getFirstAsync('SELECT * FROM budgets WHERE category = ?', [category]);
 }
 
 // ==================== User Overrides ====================
@@ -278,8 +311,10 @@ export async function saveUserOverride(merchantKey, category) {
 }
 
 export async function getUserOverrides() {
-    if (Platform.OS === 'web' || !global.__kharchaDB) return { ...memStore.user_overrides };
-    const rows = await global.__kharchaDB.getAllAsync('SELECT * FROM user_overrides');
+    if (Platform.OS === 'web') return { ...memStore.user_overrides };
+    const db = await getDB();
+    if (!db) return {};
+    const rows = await db.getAllAsync('SELECT * FROM user_overrides');
     const overrides = {};
     for (const row of rows) overrides[row.merchantKey] = row.category;
     return overrides;
@@ -288,20 +323,24 @@ export async function getUserOverrides() {
 // ==================== Settings ====================
 
 export async function saveSetting(key, value) {
-    if (Platform.OS === 'web' || !global.__kharchaDB) {
+    if (Platform.OS === 'web') {
         memStore.settings[key] = typeof value === 'string' ? value : JSON.stringify(value);
         saveToLocalStorage();
         return;
     }
-    await global.__kharchaDB.runAsync(
+    const db = await getDB();
+    if (!db) return;
+    await db.runAsync(
         `INSERT OR REPLACE INTO settings (key,value) VALUES (?,?)`,
         [key, typeof value === 'string' ? value : JSON.stringify(value)]
     );
 }
 
 export async function getSetting(key) {
-    if (Platform.OS === 'web' || !global.__kharchaDB) return memStore.settings[key] || null;
-    const row = await global.__kharchaDB.getFirstAsync('SELECT value FROM settings WHERE key = ?', [key]);
+    if (Platform.OS === 'web') return memStore.settings[key] || null;
+    const db = await getDB();
+    if (!db) return null;
+    const row = await db.getFirstAsync('SELECT value FROM settings WHERE key = ?', [key]);
     return row?.value || null;
 }
 
@@ -321,21 +360,28 @@ export async function importData(data) {
 
 // ==================== Merchant Cache ====================
 
+// No TTL — merchant names don't change. Use "Clear Cache" in Settings to force re-enrichment.
+
 /**
  * Look up a list of rawMerchant names from the persistent cache.
+ * Entries older than MERCHANT_CACHE_TTL_DAYS are treated as cache misses and re-enriched.
  * Returns a map: { rawMerchant → { cleanName, category } }
  */
 export async function getMerchantCache(rawMerchants) {
     if (!rawMerchants || rawMerchants.length === 0) return {};
-    if (!global.__kharchaDB) return {};
+    const db = await getDB();
+    if (!db) return {};
     try {
-        const placeholders = rawMerchants.map(() => '?').join(',');
-        const rows = await global.__kharchaDB.getAllAsync(
-            `SELECT rawMerchant, cleanName, category FROM merchant_cache WHERE rawMerchant IN (${placeholders})`,
-            rawMerchants
+        const rows = await db.getAllAsync(
+            `SELECT rawMerchant, cleanName, category FROM merchant_cache`
         );
+        const set = new Set(rawMerchants);
         const map = {};
-        for (const row of rows) map[row.rawMerchant] = { cleanName: row.cleanName, category: row.category };
+        for (const row of rows) {
+            if (set.has(row.rawMerchant)) {
+                map[row.rawMerchant] = { cleanName: row.cleanName, category: row.category };
+            }
+        }
         return map;
     } catch (e) {
         console.warn('[DB] getMerchantCache error:', e.message);
@@ -349,12 +395,13 @@ export async function getMerchantCache(rawMerchants) {
  */
 export async function setMerchantCache(resultMap) {
     if (!resultMap || Object.keys(resultMap).length === 0) return;
-    if (!global.__kharchaDB) return;
+    const db = await getDB();
+    if (!db) return;
     try {
         const now = new Date().toISOString();
-        await global.__kharchaDB.withTransactionAsync(async () => {
+        await db.withTransactionAsync(async () => {
             for (const [rawMerchant, { cleanName, category }] of Object.entries(resultMap)) {
-                await global.__kharchaDB.runAsync(
+                await db.runAsync(
                     `INSERT OR REPLACE INTO merchant_cache (rawMerchant, cleanName, category, enrichedAt) VALUES (?, ?, ?, ?)`,
                     [rawMerchant, cleanName, category, now]
                 );
@@ -366,8 +413,41 @@ export async function setMerchantCache(resultMap) {
 }
 
 export async function clearMerchantCache() {
-    if (!global.__kharchaDB) return;
-    await global.__kharchaDB.runAsync('DELETE FROM merchant_cache');
+    const db = await getDB();
+    if (!db) return;
+    await db.runAsync('DELETE FROM merchant_cache');
+}
+
+/**
+ * Apply cached merchant enrichment results to ALL existing transactions in the DB.
+ * Updates merchant name + category for every transaction whose rawMerchant is in the cache,
+ * skipping internal_transfer, credit_card, and keyword-protected categories.
+ * Returns the count of transactions updated.
+ */
+export async function applyMerchantCacheToTransactions() {
+    const db = await getDB();
+    if (!db) return 0;
+
+    // Load full cache once
+    const cacheRows = await db.getAllAsync(
+        `SELECT rawMerchant, cleanName, category FROM merchant_cache`
+    );
+    if (cacheRows.length === 0) return 0;
+
+    // One UPDATE per unique rawMerchant — updates all matching transactions at once
+    let updated = 0;
+    await db.withTransactionAsync(async () => {
+        for (const { rawMerchant, cleanName, category } of cacheRows) {
+            const result = await db.runAsync(
+                `UPDATE transactions SET merchant = ?, category = ?
+                 WHERE rawMerchant = ?
+                   AND category NOT IN ('internal_transfer','credit_card','atm','transfers','rent','bills','food','groceries','shopping','transport','health','entertainment','education','hardware','investment')`,
+                [cleanName, category, rawMerchant]
+            );
+            updated += result.changes ?? 0;
+        }
+    });
+    return updated;
 }
 
 /**
@@ -376,6 +456,101 @@ export async function clearMerchantCache() {
  * - Resets every transaction's category to 'uncategorized' and isExcluded to 0
  * After calling this, user should re-scan SMS to restore auto-categories.
  */
+/**
+ * Remove duplicate transactions from the DB.
+ * Keeps the earliest-inserted row (MIN rowid) for each unique rawSMS.
+ * Returns the count of rows deleted.
+ */
+export async function removeDuplicateTransactions() {
+    if (Platform.OS === 'web') {
+        const seen = new Set();
+        memStore.transactions = memStore.transactions.filter(t => {
+            const key = t.rawSMS || t.id;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+        saveToLocalStorage();
+        return 0;
+    }
+    const db = await getDB();
+    if (!db) return 0;
+    const result = await db.runAsync(`
+        DELETE FROM transactions
+        WHERE rowid NOT IN (
+            SELECT MIN(rowid) FROM transactions GROUP BY rawSMS
+        )
+    `);
+    return result.changes ?? 0;
+}
+
+/**
+ * Re-categorize transactions when the user's name changes.
+ * - Transactions whose merchant matches newName → set category = 'internal_transfer'
+ * - Transactions whose merchant matched oldName → revert to 'uncategorized' (parser will re-classify on next scan)
+ * Name matching: case-insensitive, first-name + any other word prefix match (same logic as smsParser).
+ */
+export async function reCategorizeByName(newName, oldName) {
+    if (Platform.OS === 'web') {
+        const matchesName = (merchant, name) => {
+            if (!name || !merchant) return false;
+            const stored = name.toUpperCase().split(/\s+/).filter(w => w.length > 0);
+            const parts = merchant.toUpperCase().split(/\s+/).filter(w => w.length > 0);
+            if (stored.length === 0 || parts.length === 0) return false;
+            if (stored[0] !== parts[0]) return false;
+            if (stored.length === 1) return true;
+            return stored.slice(1).some(sw => parts.some(pw => sw.startsWith(pw) || pw.startsWith(sw)));
+        };
+        for (const t of memStore.transactions) {
+            if (oldName && matchesName(t.merchant, oldName) && t.category === 'internal_transfer') {
+                t.category = 'uncategorized';
+            }
+            if (newName && matchesName(t.merchant, newName)) {
+                t.category = 'internal_transfer';
+            }
+        }
+        saveToLocalStorage();
+        return { updated: 0 };
+    }
+
+    const db = await getDB();
+    if (!db) return { updated: 0 };
+
+    // Revert old-name matches (only those we set — category = internal_transfer)
+    if (oldName && oldName.trim()) {
+        const oldFirst = oldName.trim().toUpperCase().split(/\s+/)[0];
+        await db.runAsync(
+            `UPDATE transactions SET category = 'uncategorized'
+             WHERE category = 'internal_transfer'
+               AND UPPER(merchant) LIKE ?`,
+            [`${oldFirst}%`]
+        );
+    }
+
+    // Set new-name matches → internal_transfer
+    let updated = 0;
+    if (newName && newName.trim()) {
+        const newFirst = newName.trim().toUpperCase().split(/\s+/)[0];
+        const candidates = await db.getAllAsync(
+            `SELECT id, merchant FROM transactions WHERE UPPER(merchant) LIKE ?`,
+            [`${newFirst}%`]
+        );
+        const storedWords = newName.toUpperCase().split(/\s+/).filter(w => w.length > 0);
+        const matched = candidates.filter(({ merchant }) => {
+            if (!merchant) return false;
+            const parts = merchant.toUpperCase().split(/\s+/).filter(w => w.length > 0);
+            if (storedWords[0] !== parts[0]) return false;
+            if (storedWords.length === 1) return true;
+            return storedWords.slice(1).some(sw => parts.some(pw => sw.startsWith(pw) || pw.startsWith(sw)));
+        });
+        for (const { id } of matched) {
+            await db.runAsync(`UPDATE transactions SET category = 'internal_transfer' WHERE id = ?`, [id]);
+        }
+        updated = matched.length;
+    }
+    return { updated };
+}
+
 export async function resetTransactionSettings() {
     if (Platform.OS === 'web') {
         memStore.user_overrides = {};
@@ -391,4 +566,3 @@ export async function resetTransactionSettings() {
     await db.runAsync('DELETE FROM user_overrides');
     await db.runAsync(`UPDATE transactions SET category = 'uncategorized', isExcluded = 0`);
 }
-

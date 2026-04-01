@@ -17,6 +17,7 @@ const CATEGORY_KEYWORDS = {
         'eatsure', 'faasos', 'behrouz', 'oven story', 'box8',
         'breakfast', 'chicken', 'hospi', 'sturmfrei',
         'chakra', 'mess', 'canteen', 'tiffin', 'dabba', 'thali',
+        'sodexo', 'pluxee', 'meal card',
     ],
     groceries: [
         'bigbasket', 'blinkit', 'zepto', 'dmart', 'grocery', 'kirana',
@@ -51,6 +52,8 @@ const CATEGORY_KEYWORDS = {
         'd2h', 'sun direct', 'municipal', 'society', 'maintenance',
         'insurance', 'premium', 'lic ', 'policy',
         'google cloud', 'googlecloud', 'aws', 'azure',
+        'infobip', 'twilio', 'sendgrid', 'mailchimp', 'freshworks',
+        'zoho', 'razorpay', 'cashfree', 'stripe', 'shopify',
     ],
     health: [
         'pharmacy', 'pharma', 'medical', 'medicine', 'hospital', 'clinic',
@@ -78,7 +81,6 @@ const CATEGORY_KEYWORDS = {
         'installment', 'bajaj finserv', 'hdfc ltd', 'lic housing',
         'home loan', 'car loan', 'personal loan', 'credit card payment',
         'cred', 'slice', 'cc bill', 'card bill', 'card payment',
-        'infobil', 'inft',  // ICICI CC bill payment codes
     ],
     education: [
         'school', 'college', 'university', 'udemy', 'coursera',
@@ -126,6 +128,13 @@ export function categorize(txn, userOverrides = {}) {
     // This catches transactions where the parser couldn't extract a merchant name
     const rawSMSStr = (txn.rawSMS || '').toLowerCase();
 
+    // ── Credit transaction classification ──
+    // Credits with no identifiable merchant (merchant='Received') are always
+    // money received — salary, refunds, P2P. All map to 'transfers'.
+    if (txn.type === 'credit' && (!merchant || merchant === 'received' || merchant === 'unknown')) {
+        return 'transfers';
+    }
+
     // ── Credit card detection FIRST (before UPI) ──
     // CC SMS can contain "UPI:ref" numbers, so CC check must take priority.
     // ALL credit card transactions → internal_transfer (unaccounted), never counted as spend.
@@ -135,23 +144,27 @@ export function categorize(txn, userOverrides = {}) {
         const hasCreditCard = /credit\s*card|cc\s*bill|card\s*outstanding/.test(rawSMSStr);
         const hasPaymentContext = /payment|received|outstanding|avail|paid|thank/.test(rawSMSStr);
         if (hasCreditCard && hasPaymentContext) {
-            return 'internal_transfer';
+            return 'credit_card';
         }
     }
 
-    // Credit card spend or bill payment → always unaccounted (not real spend from bank)
+    // Credit card spend → unaccounted, shown as credit_card category
     if (txn.type === 'debit') {
         // Note: CRED, Slice are CC bill payment apps — those are real bank debits, NOT CC spends.
-        // They should categorize as 'rent' (via keyword match above), not 'internal_transfer'.
-        const ccMerchantMatch = /credit\s*card|cc\s*bill|card\s*outstanding|hdfc\s*card|sbi\s*card|icici\s*card|axis\s*card|kotak\s*card|rbl\s*card|amex|uni\s*card|onecard/i.test(merchant);
-        const ccRawSMSMatch = /credit\s*card|cc\s*bill|card\s*outstanding|hdfc\s*card|sbi\s*card|icici\s*card|axis\s*card|kotak\s*card|rbl\s*card|amex/i.test(rawSMSStr) ||
-            /\bcard\s*(?:no\.?\s*)?(?:XX|xx|\*+)\d+/i.test(rawSMSStr) ||   // "Card XX1234" or "Card no. XX1234"
-            /\bspent\s+(?:using|on)\s+.*card/i.test(rawSMSStr) ||           // "spent using card" / "spent on card"
-            /\bcard\s+(?:ending|no\.?)\s*\d+/i.test(rawSMSStr) ||           // "Card ending 1234"
-            /\bavl\s*\.?\s*l(?:i?mt|imit)\b/i.test(rawSMSStr);             // "Avl Lmt" = credit card indicator
+        // They categorize as 'rent' via keyword match above, never reach here.
+        // Pluxee/Sodexo meal card SMS contains "card no.xxNNNN" but is NOT a credit card — skip CC detection.
+        const isPluxee = /pluxee|sodexo/i.test(rawSMSStr);
+        if (!isPluxee) {
+            const ccMerchantMatch = /credit\s*card|cc\s*bill|card\s*outstanding|hdfc\s*card|sbi\s*card|icici\s*card|axis\s*card|kotak\s*card|rbl\s*card|amex|uni\s*card|onecard/i.test(merchant);
+            const ccRawSMSMatch = /credit\s*card|cc\s*bill|card\s*outstanding|hdfc\s*card|sbi\s*card|icici\s*card|axis\s*card|kotak\s*card|rbl\s*card|amex/i.test(rawSMSStr) ||
+                /\bcard\s*(?:no\.?\s*)?(?:XX|xx|\*+)\d+/i.test(rawSMSStr) ||
+                /\bspent\s+(?:using|on)\s+.*card/i.test(rawSMSStr) ||
+                /\bcard\s+(?:ending|no\.?)\s*\d+/i.test(rawSMSStr) ||
+                /\bavl\s*\.?\s*l(?:i?mt|imit)\b/i.test(rawSMSStr);
 
-        if (ccMerchantMatch || ccRawSMSMatch) {
-            return 'internal_transfer';
+            if (ccMerchantMatch || ccRawSMSMatch) {
+                return 'credit_card';
+            }
         }
     }
     // ── End credit card detection ──
