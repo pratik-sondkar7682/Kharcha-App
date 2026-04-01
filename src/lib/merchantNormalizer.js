@@ -89,9 +89,7 @@ const DEFAULT_ALIASES = {
     'DMART': 'DMart',
     'CRED': 'CRED',
     'SLICE': 'Slice',
-    'ETERNAL LIMITED': 'Pluxee (Sodexo)',
-    'ETERNAL LIM': 'Pluxee (Sodexo)',
-    'PLUXEE': 'Pluxee (Sodexo)',
+    // Pluxee/Sodexo: parser already extracts the real merchant from the SMS, no alias needed
     'GOOGLECLOUD': 'Google Cloud',
     'GOOGLEGOOG': 'Google',
     'YOUTUBEGOOG': 'YouTube',
@@ -103,6 +101,10 @@ const DEFAULT_ALIASES = {
     'BIGTREE ENTERTA': 'PVR Inox',
     'BIGTREE': 'PVR Inox',
 };
+
+const SHORT_ALIAS_PATTERNS = Object.entries(DEFAULT_ALIASES)
+    .filter(([key]) => key.length <= 3)
+    .map(([key, value]) => ({ re: new RegExp(`\\b${key}\\b`, 'i'), value }));
 
 /**
  * Normalize a merchant name — strip prefixes/suffixes, apply aliases.
@@ -144,12 +146,11 @@ export function normalizeMerchant(rawName, userAliases = {}) {
     if (DEFAULT_ALIASES[upperName]) return DEFAULT_ALIASES[upperName];
 
     // Partial match on default aliases (require word boundary for short keys to avoid false matches)
+    for (const { re, value } of SHORT_ALIAS_PATTERNS) {
+        if (re.test(upperName)) return value;
+    }
     for (const [key, value] of Object.entries(DEFAULT_ALIASES)) {
-        if (key.length <= 3) {
-            // Short keys like 'VI', 'JIO', 'OLA' — require word boundary
-            const re = new RegExp(`\\b${key}\\b`, 'i');
-            if (re.test(upperName)) return value;
-        } else {
+        if (key.length > 3) {
             if (upperName.includes(key)) return value;
         }
     }

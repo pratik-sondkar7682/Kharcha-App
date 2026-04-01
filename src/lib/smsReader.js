@@ -16,7 +16,7 @@ import { parseSMS, parseBulkSMS } from './smsParser';
 import { categorizeAll } from './categorizer';
 import { deduplicateTransactions } from './deduplicator';
 import { sanitizeForStorage } from './accountMasker';
-import { insertTransactions, getTransactions, getUserOverrides, getSetting, getMerchantCache, setMerchantCache } from './database';
+import { insertTransactions, getTransactions, getTransactionHashFields, getUserOverrides, getSetting, saveSetting, getMerchantCache, setMerchantCache, removeDuplicateTransactions, applyMerchantCacheToTransactions } from './database';
 import { enrichMerchantsBatch } from './aiCategorizer';
 
 /**
@@ -72,8 +72,8 @@ export async function hasSMSPermission() {
  * @returns {Object[]} - Array of { body, sender, timestamp }
  */
 export async function readSMSFromPhone(options = {}) {
-    // On web: return sample data for demo/preview
-    if (Platform.OS === 'web') return getSampleSMSData();
+    // On web: SMS reading is not supported. Return empty — caller must enable demo mode explicitly.
+    if (Platform.OS === 'web') return [];
 
     if (Platform.OS !== 'android') return [];
 
@@ -96,7 +96,6 @@ export async function readSMSFromPhone(options = {}) {
 
         const filter = {
             box: 'inbox',
-            maxCount: options.maxCount || 2000,
             ...(options.minDate ? { minDate: options.minDate } : {}),
         };
 
@@ -129,10 +128,18 @@ export async function readSMSFromPhone(options = {}) {
  * @param {Function} [onProgress] - Optional callback (progress, statusText)
  * @returns {{ newCount: number, duplicateCount: number, unparsedCount: number, total: number }}
  */
+// Yields to the UI thread so progress updates render before heavy sync work starts
+const tick = () => new Promise(r => setTimeout(r, 0));
+
 export async function syncSMS(options = {}, onProgress) {
     const notify = async (progress, status) => {
         if (onProgress) onProgress(progress, status);
+        await tick(); // let UI render the update before blocking work begins
     };
+
+    // Captured at START so any SMS that arrive during the sync are included
+    // on the next incremental pass (avoids a race with late-arriving messages).
+    const syncStartedAt = Date.now();
 
     await notify(5, 'Reading SMS from phone...');
     // Step 1: Read SMS from phone
@@ -140,79 +147,53 @@ export async function syncSMS(options = {}, onProgress) {
 
     if (rawMessages.length === 0) {
         await notify(100, 'No new messages found.');
+        await saveSetting('last_synced_at', String(syncStartedAt));
         return { newCount: 0, duplicateCount: 0, unparsedCount: 0, total: 0 };
     }
 
     await notify(10, `Filtering ${rawMessages.length} messages...`);
     // Step 2: Pre-filter (remove OTPs, promos, etc.)
+    console.time('[sync] preFilter');
     const filtered = rawMessages.filter(msg => {
         const result = preFilterSMS(msg.body, msg.sender);
         return result.shouldProcess;
     });
+    console.timeEnd('[sync] preFilter');
 
-    await notify(20, 'Parsing transaction details...');
+    await notify(20, `Parsing ${filtered.length} bank messages...`);
     // Step 3: Parse
     const userAliases = {};
     const name = await getSetting('user_full_name');
     const userIdentity = { fullName: name };
+    console.time('[sync] parseBulkSMS');
     const { parsed, unparsed, stats } = parseBulkSMS(filtered, userAliases, userIdentity);
+    console.timeEnd('[sync] parseBulkSMS');
 
-    await notify(30, 'Categorizing locally...');
-    // Step 4: Categorize locally using Regex/Dictionary
+    await notify(25, `Categorizing ${parsed.length} transactions...`);
+    // Step 4: Structural categorization only — CC, ATM, UPI P2P, internal transfers.
     const userOverrides = await getUserOverrides();
+    console.time('[sync] categorizeAll');
     const categorized = categorizeAll(parsed, userOverrides);
+    console.timeEnd('[sync] categorizeAll');
 
-    // Step 4.5: AI Enrichment — cache-first, Claude only for NEW merchants
+    // Step 5: collect merchants for background enrichment (AI moved to background)
+    const STRUCTURAL_CATEGORIES = new Set(['internal_transfer', 'credit_card', 'atm', 'transfers']);
     const forAI = categorized.filter(t =>
-        t.rawMerchant &&
-        t.rawMerchant !== 'Received' &&
-        t.category !== 'internal_transfer'
+        t.rawMerchant && t.rawMerchant !== 'Received' && !STRUCTURAL_CATEGORIES.has(t.category)
     );
     const uniqueMerchants = [...new Set(forAI.map(t => t.rawMerchant).filter(Boolean))];
 
-    // 1. Check persistent cache first
-    const cached = await getMerchantCache(uniqueMerchants);
-    const uncachedMerchants = uniqueMerchants.filter(m => !cached[m]);
-
-    console.log(`[syncSMS] Merchants: ${uniqueMerchants.length} total, ${Object.keys(cached).length} cached, ${uncachedMerchants.length} new → calling Claude`);
-
-    // 2. Call Claude ONLY for merchants not in cache
-    let freshResults = {};
-    if (uncachedMerchants.length > 0) {
-        await notify(35, `AI Enriching ${uncachedMerchants.length} new merchants...`);
-        freshResults = await enrichMerchantsBatch(uncachedMerchants, (subProgress) => {
-            // Map 35% -> 85% progress range
-            const totalProgress = 35 + (subProgress * 50);
-            notify(Math.round(totalProgress), `AI Enriching (${Math.round(subProgress * 100)}%)...`);
-        });
-        // 3. Save new results to cache for future scans
-        await setMerchantCache(freshResults);
-    } else {
-        await notify(85, 'All merchants found in cache.');
-    }
-
-    // 4. Merge cache + fresh results and apply
-    const merchantResultMap = { ...cached, ...freshResults };
-    for (let i = 0; i < categorized.length; i++) {
-        const result = merchantResultMap[categorized[i].rawMerchant];
-        if (result && categorized[i].category !== 'internal_transfer') {
-            categorized[i].merchant = result.cleanName;
-            categorized[i].category = result.category;
-        }
-    }
-
-
     await notify(90, 'Sanitizing data...');
-    // Step 5: Sanitize (mask account numbers in raw SMS)
     const sanitized = categorized.map(txn => ({
         ...txn,
         rawSMS: sanitizeForStorage(txn.rawSMS),
     }));
 
     await notify(95, 'Deduplicating...');
-    // Step 6: Deduplicate against existing transactions
-    const existing = await getTransactions({}, 'date DESC', 10000);
+    console.time('[sync] dedup');
+    const existing = await getTransactionHashFields();
     const { unique, duplicates, ambiguous } = deduplicateTransactions(sanitized, existing);
+    console.timeEnd('[sync] dedup');
 
     await notify(98, 'Saving to database...');
     // Step 7: Store unique transactions + ambiguous (mark for review)
@@ -220,13 +201,39 @@ export async function syncSMS(options = {}, onProgress) {
     const inserted = await insertTransactions(toStore);
 
     await notify(100, 'Sync complete!');
+    await saveSetting('last_synced_at', String(syncStartedAt));
     return {
         newCount: inserted,
         duplicateCount: duplicates.length,
         unparsedCount: unparsed.length,
         ambiguousCount: ambiguous.length,
         total: rawMessages.length,
+        pendingMerchants: uniqueMerchants,
     };
+}
+
+/**
+ * Phase 2: AI merchant enrichment — runs after UI is already showing data.
+ * Fire-and-forget from the caller. Writes via applyMerchantCacheToTransactions().
+ */
+export async function enrichInBackground(merchants, onComplete, onProgress) {
+    if (!merchants || merchants.length === 0) { onComplete?.(); return; }
+    try {
+        const cached = await getMerchantCache(merchants);
+        const uncached = merchants.filter(m => !cached[m]);
+        if (uncached.length > 0) {
+            onProgress?.(0, `Categorizing 0 / ${uncached.length} merchants…`);
+            const fresh = await enrichMerchantsBatch(uncached, (p, done, total) => {
+                onProgress?.(Math.round(p * 100), `Categorizing ${done ?? 0} / ${total ?? uncached.length} merchants…`);
+            });
+            await setMerchantCache(fresh);
+        }
+        await applyMerchantCacheToTransactions();
+    } catch (e) {
+        console.warn('[enrichInBackground] Error:', e.message);
+    } finally {
+        onComplete?.();
+    }
 }
 
 /**

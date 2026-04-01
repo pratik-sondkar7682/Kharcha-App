@@ -98,6 +98,30 @@ function buildDate(day, month, year, monthIsNumber = false) {
     return date;
 }
 
+// Patterns ordered by specificity (most specific first) — defined at module scope to avoid recompilation
+const DATE_PATTERNS = [
+    // 24-Mar-2025, 24-Mar-25
+    /\b(\d{1,2}-[A-Za-z]{3}-\d{2,4})\b/,
+    // 24Mar25, 24MAR2025
+    /\b(\d{1,2}[A-Za-z]{3}\d{2,4})\b/,
+    // 24-03-2025, 24/03/2025
+    /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
+    // 2025-03-24 (ISO)
+    /\b(\d{4}-\d{1,2}-\d{1,2})\b/,
+    // Mar 24, 2025
+    /\b([A-Za-z]{3}\s+\d{1,2},?\s+\d{2,4})\b/,
+    // 24 Mar 2025, 24 Mar, 2025
+    /\b(\d{1,2}\s+[A-Za-z]{3},?\s+\d{2,4})\b/,
+    // --- Year-less patterns ---
+    // 24-Mar, 24/Mar
+    /\b(\d{1,2}-[A-Za-z]{3})\b/,
+    /\b(\d{1,2}\s+[A-Za-z]{3})\b/,
+    // 24/03
+    /\b(\d{1,2}[\/\-]\d{1,2})\b/,
+    // Mar 24
+    /\b([A-Za-z]{3}\s+\d{1,2})\b/,
+];
+
 /**
  * Extract a date from an SMS body string.
  * Tries multiple regex patterns to find date within SMS text.
@@ -107,29 +131,7 @@ function buildDate(day, month, year, monthIsNumber = false) {
 export function extractDateFromSMS(smsBody) {
     if (!smsBody) return null;
 
-    // Patterns ordered by specificity (most specific first)
-    const datePatterns = [
-        // 24-Mar-2025, 24-Mar-25
-        /\b(\d{1,2}-[A-Za-z]{3}-\d{2,4})\b/,
-        // 24Mar25, 24MAR2025
-        /\b(\d{1,2}[A-Za-z]{3}\d{2,4})\b/,
-        // 24-03-2025, 24/03/2025
-        /\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\b/,
-        // 2025-03-24 (ISO)
-        /\b(\d{4}-\d{1,2}-\d{1,2})\b/,
-        // Mar 24, 2025
-        /\b([A-Za-z]{3}\s+\d{1,2},?\s+\d{2,4})\b/,
-        // 24 Mar 2025, 24 Mar, 2025
-        /\b(\d{1,2}\s+[A-Za-z]{3},?\s+\d{2,4})\b/,
-        // --- Year-less patterns ---
-        // 24-Mar, 24/Mar
-        /\b(\d{1,2}-[A-Za-z]{3})\b/,
-        /\b(\d{1,2}\s+[A-Za-z]{3})\b/,
-        // 24/03
-        /\b(\d{1,2}[\/\-]\d{1,2})\b/,
-        // Mar 24
-        /\b([A-Za-z]{3}\s+\d{1,2})\b/,
-    ];
+    const datePatterns = DATE_PATTERNS;
 
     for (const pattern of datePatterns) {
         const match = smsBody.match(pattern);

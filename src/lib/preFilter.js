@@ -64,9 +64,10 @@ const REJECT_PATTERNS = [
     /\bcheque\b.*\bcleared?\b/i,
     /\b(auto|si)\s*debit\b.*\bscheduled\b/i,
     /will\s+be\s+(?:auto)?debited\b/i,
-    // URL shorteners and bank promo domains (never in real transaction alerts)
+    // URL shorteners, bank promo domains, and payment app deep-links (never in real transaction alerts)
     /bit\.ly|tinyurl|surl\.li/i,
     /axbk\.in|indusbnk\.in|idfcfs\.in|go\.hdfc|yesbnk\.in/i,
+    /https?:\/\/(?:phone\.pe|paytm\.com|gpay\.app|bhim\.upi)\//i,
     // "Valid till" = offer/promotional
     /valid\s+till\b/i,
     /valid\s+upto\b/i,
@@ -84,6 +85,19 @@ const REJECT_PATTERNS = [
     // Auto-debit reminders (not actual debits)
     /will\s+be\s+auto\s+debited\s+via/i,
     /please\s+maintain\s+sufficient\s+limit/i,
+    // Mandate registration/setup notifications (no money moved yet)
+    /mandate\s+(?:registered|created|set\s*up|accepted|approved|activated|confirmed)/i,
+    /(?:nach|ecs|si|e.?mandate|auto.?pay)\s+(?:mandate\s+)?(?:registered|created|set\s*up|accepted|approved|activated|confirmed)/i,
+    /standing\s+instruction\s+(?:created|registered|set\s*up|activated)/i,
+    /\bauto.?pay\s+(?:set\s*up|registered|created|enabled|activated)\b/i,
+    /\bmandate\s+id\b.*\bregistered\b/i,
+    /\bregistered\b.*\bmandate\b/i,
+    /upi\s+autopay\s+(?:mandate\s+)?(?:set\s*up|created|registered|enabled)/i,
+    // AutoPay approval requests — "has sent you an AutoPay request" / "Click to approve"
+    /sent\s+you\s+an?\s+auto.?pay\s+request/i,
+    /auto.?pay\s+request\s+for\s+(?:up\s+to\s+)?(?:rs\.?|inr|₹)/i,
+    /click\s+to\s+approve\s+this\s+(?:auto.?pay\s+)?request/i,
+    /approve\s+this\s+(?:auto.?pay\s+)?request\s+now/i,
     // Offer language
     /\bcashback\s+(up\s+to|upto)\b/i,
     /get\s+up\s+to\s+(rs|inr|₹)/i,
@@ -117,7 +131,7 @@ const BANK_SENDER_PATTERNS = [
     // Major banks & CC Issuers
     /^[A-Z]{2}-[A-Z]*(?:SBI|HDFC|ICICI|AXIS|KOTAK|PNB|BOB|YES|CANARA|UNION|IDBI|IDFC|INDUS|FEDER|BAND|RBL|CITI|AMEX|HSBC|SCB|BOI|CBI|IOB|UCO|MAHB|J&KBK)/i,
     // Payment banks / wallets / Fintech
-    /^[A-Z]{2}-(?:PAYTM|PHONPE|GPAY|AMAZON|AIRTEL|JIOPAY|FREERC|SLICE|UNI|ONECRD|CRED|POSTPE)/i,
+    /^[A-Z]{2}-(?:PAYTM|PHONPE|GPAY|AMAZON|AIRTEL|JIOPAY|FREERC|SLICE|UNI|ONECRD|CRED|POSTPE|PLUXEE)/i,
     // Generic bank patterns
     /^[A-Z]{2}-[A-Z]*(?:BANK|BK|BNK|CRD|CARD)\b/i,
     // 5-6 digit numeric senders (some banks use these)

@@ -93,9 +93,11 @@ function extractAccount(text) {
  */
 function extractUPIRef(text) {
     const patterns = [
-        /UPI\s*(?:Ref|ref)\s*(?:No\.?\s*)?[:\s]*(\d{9,16})/i,
-        /Txn\s*(?:ID|Id|id)\s*[:\s]*([A-Za-z0-9]+)/i,
-        /Ref\s*(?:no\.?\s*)?[:\s]*(\d{9,16})/i,
+        /UPI\s*[:\s]\s*(\d{9,16})/i,                           // "UPI:642920796196" or "UPI 642920796196"
+        /UPI\s*(?:Ref|ref)\s*(?:No\.?\s*)?[:\s]*(\d{9,16})/i,  // "UPI Ref No: ..."
+        /Refno\s+(\d{9,16})/i,                                  // "Refno 608083000402" (SBI UPI)
+        /Ref\s*(?:no\.?\s*)?[:\s]*(\d{9,16})/i,                // "Ref no: ..."
+        /Txn\s*(?:ID|Id|id)\s*[:\s]*([A-Za-z0-9]{9,})/i,      // "Txn ID: ..."
     ];
 
     for (const pattern of patterns) {
@@ -126,6 +128,12 @@ const BANK_PATTERNS = [
         pattern: /(?:SBI|State Bank).*a\/c\s*X?X?(\d{4})\s*credited\s*(?:by|with)?\s*(?:Rs\.?\s*|INR\s*|₹\s*)([0-9,]+\.?\d{0,2})/i,
         extract: (m) => ({ type: 'credit', account: `XX${m[1]}`, amount: parseFloat(m[2].replace(/,/g, '')), merchant: 'Received', bank: 'SBI' }),
     },
+    // SBI UPI short format — "Dear UPI user A/C X6963 debited by 75.00 on date 21Mar26 trf to NAME"
+    {
+        bank: 'SBI',
+        pattern: /Dear\s+UPI\s+user\s+A\/C\s+X?(\d{4})\s+debited\s+by\s+([0-9,]+\.?\d{0,2})\s+on\s+date\s+\S+\s+trf\s+to\s+(.+?)(?:\s+Refno|\s+If\s+not|$)/i,
+        extract: (m) => ({ type: 'debit', account: `XX${m[1]}`, amount: parseFloat(m[2].replace(/,/g, '')), merchant: m[3].trim(), bank: 'SBI' }),
+    },
     // SBI Credit Card Spend
     {
         bank: 'SBI',
@@ -136,7 +144,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[1].replace(/,/g, '')), 
             merchant: m[3].trim(), 
             bank: 'SBI',
-            category: 'internal_transfer' // Always unaccounted
+            category: 'credit_card'
         }),
     },
     // HDFC Debit
@@ -161,7 +169,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[1].replace(/,/g, '')), 
             merchant: m[3].trim(), 
             bank: 'HDFC',
-            category: 'internal_transfer' // Always unaccounted
+            category: 'credit_card'
         }),
     },
     // ICICI "debited from" — AutoPay/Mandate: "Rs X debited from ICICI Bank Savings Account XX681 ... towards MERCHANT"
@@ -217,6 +225,20 @@ const BANK_PATTERNS = [
             return { type: 'credit', account: `XX${m[1]}`, amount: parseFloat(m[2].replace(/,/g, '')), merchant, bank: 'ICICI' };
         },
     },
+    // ICICI Credit Card — foreign currency "USD/EUR/GBP X spent using ICICI Bank Card XX on DATE on MERCHANT"
+    {
+        bank: 'ICICI',
+        pattern: /([A-Z]{3})\s+([0-9,]+\.?\d{0,2})\s+spent\s+using\s+ICICI\s+Bank\s+Card\s+(?:XX|xx|\*{2,})(\d{3,6})\s+on\s+\d{1,2}-\w+-\d{2,4}\s+on\s+(.+?)(?:\.\s|\s+Avl|\s+Avail|\s+If\s+not|\s+Call)/i,
+        extract: (m) => ({
+            type: 'debit',
+            account: `XX${m[3]}`,
+            amount: parseFloat(m[2].replace(/,/g, '')),
+            merchant: m[4].trim(),
+            bank: 'ICICI',
+            category: 'credit_card',
+            currency: m[1],
+        }),
+    },
     // ICICI Credit Card — "INR X spent using ICICI Bank Card XX on DATE on MERCHANT"
     {
         bank: 'ICICI',
@@ -227,7 +249,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[1].replace(/,/g, '')),
             merchant: m[3].trim(),
             bank: 'ICICI',
-            category: 'internal_transfer'
+            category: 'credit_card'
         }),
     },
     // ICICI Credit Card — "Rs X spent on ICICI Bank Card XX on DATE at MERCHANT"
@@ -240,7 +262,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[1].replace(/,/g, '')),
             merchant: m[3].trim(),
             bank: 'ICICI',
-            category: 'internal_transfer'
+            category: 'credit_card'
         }),
     },
     // Old-style ICICI (sender ICICIB/ICICIT, body says "Dear Customer, Acct/Acc XX...")
@@ -271,7 +293,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[1].replace(/,/g, '')),
             merchant: m[3].trim(),
             bank: 'Axis',
-            category: 'internal_transfer'
+            category: 'credit_card'
         }),
     },
     // Axis Bank CC multi-line (old format): "Spent\nCard no. XX8217\nINR 816\nDATE TIME\nMERCHANT\nAvl"
@@ -284,7 +306,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[2].replace(/,/g, '')),
             merchant: m[3].trim(),
             bank: 'Axis',
-            category: 'internal_transfer'
+            category: 'credit_card'
         }),
     },
     // Axis Bank CC: "Transaction of INR X on Axis Bank Credit Card no. XX8217 at MERCHANT"
@@ -297,14 +319,14 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[1].replace(/Gre/, '')), 
             merchant: m[3].trim(), 
             bank: 'Axis',
-            category: 'internal_transfer'
+            category: 'credit_card'
         }),
     },
-    // IDFC FASTag: "INR X toll paid from IDFC FIRST Bank Tag ... at TOLL PLAZA"
+    // IDFC FASTag: "INR X toll paid from IDFC FIRST Bank Tag ... at TOLL PLAZA on DD/MM/YYYY"
     {
         bank: 'IDFC',
-        pattern: /(?:INR|Rs\.?)\s*([0-9,]+\.?\d{0,2})\s+toll\s+paid\s+from\s+IDFC.*?at\s+(.+?)(?:\s*$|\.)/i,
-        extract: (m) => ({ type: 'debit', account: '', amount: parseFloat(m[1].replace(/,/g, '')), merchant: m[2].trim(), bank: 'IDFC' }),
+        pattern: /(?:INR|Rs\.?)\s*([0-9,]+\.?\d{0,2})\s+toll\s+paid\s+from\s+IDFC.*?at\s+(.+?)(?:\s+on\s+\d{1,2}[\/\-]|\s*$|\.)/i,
+        extract: (m) => ({ type: 'debit', account: '', amount: parseFloat(m[1].replace(/,/g, '')), merchant: m[2].trim(), bank: 'IDFC', category: 'transport' }),
     },
     // IDFC FASTag credit (reload): "IDFC FIRST Bank FASTag credited with INR X"
     {
@@ -312,11 +334,29 @@ const BANK_PATTERNS = [
         pattern: /IDFC.*?FASTag.*?credited\s+with\s+(?:INR|Rs\.?)\s*([0-9,]+\.?\d{0,2})/i,
         extract: (m) => ({ type: 'credit', account: '', amount: parseFloat(m[1].replace(/,/g, '')), merchant: 'FASTag Reload', bank: 'IDFC' }),
     },
+    // Pluxee (Sodexo) Meal Card — "Rs X spent from Pluxee Meal wallet, card no.xx1330 on DATE at MERCHANT"
+    {
+        bank: 'Pluxee',
+        pattern: /(?:Rs\.?|INR)\s*([0-9,]+\.?\d{0,2})\s+spent\s+from\s+Pluxee\s+\S+\s+wallet,\s+card\s+no\.?(?:xx|XX|\*+)(\d{3,6})\s+on\s+[\d\-\/\s:]+at\s+(.+?)(?:\s*\.\s*Avl|\s*Not\s+you|$)/i,
+        extract: (m) => ({ type: 'debit', account: `XX${m[2]}`, amount: parseFloat(m[1].replace(/,/g, '')), merchant: m[3].trim(), bank: 'Pluxee' }),
+    },
+    // Pluxee — "Rs X deducted from your Pluxee Card xxxx1330 towards MERCHANT"
+    {
+        bank: 'Pluxee',
+        pattern: /(?:Rs\.?|INR)\s*([0-9,]+\.?\d{0,2})\s+deducted\s+from\s+your\s+Pluxee\s+Card\s+(?:xxxx|XX|\*+)(\d{3,6})\s+towards\s+(.+?)(?:\.\s*Pluxee|$)/i,
+        extract: (m) => ({ type: 'debit', account: `XX${m[2]}`, amount: parseFloat(m[1].replace(/,/g, '')), merchant: m[3].trim(), bank: 'Pluxee' }),
+    },
+    // Pluxee catch-all — any Pluxee SMS with amount and merchant "at MERCHANT" or "to MERCHANT"
+    {
+        bank: 'Pluxee',
+        pattern: /(?:Rs\.?|INR)\s*([0-9,]+\.?\d{0,2})\s+.*?(?:Pluxee|Sodexo).*?(?:at|to)\s+([A-Za-z0-9\s&'.\-]+?)(?:\s*\.\s*|\s*Not\s+you|$)/i,
+        extract: (m) => ({ type: 'debit', account: '', amount: parseFloat(m[1].replace(/,/g, '')), merchant: m[2].trim(), bank: 'Pluxee' }),
+    },
     // Axis Bank Card (existing - kept for non-credit-card formats)
     {
         bank: 'Axis',
         pattern: /AXIS\s*BANK\s*Card\s*(?:XX|xx|\*{2,})(\d{4}).*?(?:used|transaction)\s*(?:for|of)\s*(?:Rs\.?\s*|INR\s*|₹\s*)([0-9,]+\.?\d{0,2})\s*(?:at|on)\s+([A-Za-z0-9\s\._\-]+?)(?:\s+on\s|\.|$)/i,
-        extract: (m) => ({ type: 'debit', account: `XX${m[1]}`, amount: parseFloat(m[2].replace(/,/g, '')), merchant: m[3].trim(), bank: 'Axis', category: 'internal_transfer' }),
+        extract: (m) => ({ type: 'debit', account: `XX${m[1]}`, amount: parseFloat(m[2].replace(/,/g, '')), merchant: m[3].trim(), bank: 'Axis', category: 'credit_card' }),
     },
     // Kotak Debit
     {
@@ -334,7 +374,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[1].replace(/,/g, '')), 
             merchant: m[3].trim(), 
             bank: 'Kotak',
-            category: 'internal_transfer' // Always unaccounted
+            category: 'credit_card'
         }),
     },
     // Canara Bank Debit — "An amount of INR X has been DEBITED to your account XXXX2901 on DATE"
@@ -372,7 +412,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[2].replace(/,/g, '')),
             merchant: m[3].trim(),
             bank: '',
-            category: 'internal_transfer'
+            category: 'credit_card'
         }),
     },
     // "INR 999 spent on/using Card XX1234 at MERCHANT on DATE"
@@ -385,7 +425,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[1].replace(/,/g, '')),
             merchant: m[3].trim(),
             bank: '',
-            category: 'internal_transfer'
+            category: 'credit_card'
         }),
     },
     // "Transaction of Rs X on Card ending/no 1234 at MERCHANT"
@@ -411,7 +451,7 @@ const BANK_PATTERNS = [
             amount: parseFloat(m[1].replace(/,/g, '')),
             merchant: m[3].trim(),
             bank: '',
-            category: 'internal_transfer'
+            category: 'credit_card'
         }),
     },
     // ── End generic CC patterns ──
@@ -490,7 +530,7 @@ function genericParse(body) {
     // Detect CC transactions generically
     let category = null;
     if (/\bcredit\s*card\b|\bcard\s+(?:no\.?\s*)?(?:XX|xx|\*+)\d+|\bavl\s*\.?\s*l(?:i?mt|imit)\b|\bspent\s+(?:using|on)\s+.*card/i.test(body)) {
-        category = 'internal_transfer';
+        category = 'credit_card';
     }
 
     return {
@@ -516,19 +556,24 @@ function isInternalTransfer(body, merchant, identity = {}) {
     if (/SELF|OWN ACCOUNT|OWN A\/C|LINKED ACCOUNT|LINKED A\/C|TRANSFER TO SELF/i.test(text)) return true;
 
     // Identity matching — catch transfers to/from user's own name.
-    // Banks often abbreviate surnames (e.g. "PRATIK SURESH S" for "Pratik Suresh Sondkar"),
-    // so we use word-based matching: first name must match + at least one other word.
+    // Banks often abbreviate names in many ways:
+    //   "PRATIK SONDKAR" stored → SMS shows "PRATIK SURESH S" (middle name inserted, surname initial only)
+    //   "PRATIK SURESH SONDKAR" stored → SMS shows "PRATIK S" or "PRATIK SONDKAR"
+    // Strategy: first name must match + any stored word must prefix-match any SMS word (or vice versa)
     if (identity.fullName && merchant) {
-        const storedWords = identity.fullName.toUpperCase().split(/\s+/).filter(w => w.length > 1);
-        const merchantWords = merchant.toUpperCase().split(/\s+/).filter(w => w.length > 1);
-        if (storedWords.length >= 2 && merchantWords.length >= 2) {
-            // First name must match
+        const storedWords = identity.fullName.toUpperCase().split(/\s+/).filter(w => w.length > 0);
+        const merchantWords = merchant.toUpperCase().split(/\s+/).filter(w => w.length > 0);
+        if (storedWords.length >= 1 && merchantWords.length >= 1) {
+            // First name must always match exactly
             const firstNameMatch = storedWords[0] === merchantWords[0];
-            // At least one other word must match (handles abbreviated surnames)
-            const otherMatch = storedWords.slice(1).some(sw =>
-                merchantWords.slice(1).some(mw => sw.startsWith(mw) || mw.startsWith(sw))
-            );
-            if (firstNameMatch && otherMatch) return true;
+            if (firstNameMatch) {
+                if (storedWords.length === 1) return true; // single-word name, first match is enough
+                // Any stored word (including surname) must prefix-match any SMS word
+                const otherMatch = storedWords.slice(1).some(sw =>
+                    merchantWords.some(mw => sw.startsWith(mw) || mw.startsWith(sw))
+                );
+                if (otherMatch) return true;
+            }
         }
     }
 
