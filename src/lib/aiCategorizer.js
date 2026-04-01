@@ -10,6 +10,8 @@
 import { normalizeMerchant } from './merchantNormalizer';
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+const PROXY_URL = process.env.EXPO_PUBLIC_AI_PROXY_URL;
+const PROXY_SECRET = process.env.EXPO_PUBLIC_PROXY_SECRET;
 const GEMINI_MODEL = 'gemini-3.1-flash-lite-preview';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
@@ -140,11 +142,18 @@ async function _callGemini(merchants) {
         },
     });
 
-    const doFetch = () => fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-    });
+    const useProxy = !!PROXY_URL;
+    const doFetch = () => useProxy
+        ? fetch(PROXY_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-proxy-secret': PROXY_SECRET || '' },
+            body,
+        })
+        : fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+        });
 
     let response = await doFetch();
 
